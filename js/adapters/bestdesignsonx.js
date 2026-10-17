@@ -2,7 +2,8 @@ const { fetchText, xStatusId, toTime, cleanTitle } = require('./util');
 
 const ORIGIN = 'https://bestdesignsonx.com';
 const TABLE = 'bestdesignsonx';
-const MAX_ROWS = 200;
+const PAGE_ROWS = 200;
+const MAX_ROWS = 3000;
 
 // The site tags every post. These tags mark non-UI work (identity, type, art); a post is kept
 // when it has at least one tag outside this list, e.g. ui-interaction, sidebar, dropdown.
@@ -69,12 +70,13 @@ function parse(rows) {
   return rows.filter((r) => (!r.status || r.status === 'Published') && isUi(r)).map(toItem).filter((it) => it.media.length);
 }
 
-async function query(fetch, config, since) {
+async function query(fetch, config, since, offset) {
   const params = new URLSearchParams({
     select: 'id,author_name,handle,tweet_text,post_url,media,published_at,tags,status',
     status: 'eq.Published',
-    order: 'published_at.desc.nullslast',
-    limit: String(MAX_ROWS),
+    order: 'published_at.desc.nullslast,id.desc',
+    limit: String(PAGE_ROWS),
+    offset: String(offset),
   });
   if (since) params.set('published_at', `gte.${new Date(since).toISOString()}`);
   return fetch(`${config.url}/rest/v1/${TABLE}?${params}`, {
@@ -88,13 +90,19 @@ module.exports = {
   matches: (url) => /(^|\.)bestdesignsonx\.com$/i.test(new URL(url).hostname),
   async fetchItems(_sourceUrl, { fetch, since }) {
     cachedConfig = cachedConfig || (await discoverConfig(fetch));
-    let res = await query(fetch, cachedConfig, since);
-    if (res.status === 401 || res.status === 403) {
-      cachedConfig = await discoverConfig(fetch);
-      res = await query(fetch, cachedConfig, since);
+    const rows = [];
+    for (let offset = 0; offset < MAX_ROWS; offset += PAGE_ROWS) {
+      let res = await query(fetch, cachedConfig, since, offset);
+      if (res.status === 401 || res.status === 403) {
+        cachedConfig = await discoverConfig(fetch);
+        res = await query(fetch, cachedConfig, since, offset);
+      }
+      if (!res.ok) throw new Error(`bestdesignsonx data endpoint responded ${res.status}`);
+      const page = await res.json();
+      rows.push(...page);
+      if (page.length < PAGE_ROWS || !since) break;
     }
-    if (!res.ok) throw new Error(`bestdesignsonx data endpoint responded ${res.status}`);
-    return parse(await res.json());
+    return parse(rows);
   },
   parse,
   findConfig,

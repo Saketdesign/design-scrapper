@@ -11,4 +11,20 @@ const FIRST_RUN_LOOKBACK_MS = 24 * 3600e3;
 const LOOKBACK_SLACK_MS = 6 * 3600e3;
 const MAX_LOOKBACK_MS = 14 * 24 * 3600e3;
 
-module.exports = { DEFAULT_SOURCES, RUN_EVERY_MS, CHECK_EVERY_MS, FIRST_RUN_LOOKBACK_MS, LOOKBACK_SLACK_MS, MAX_LOOKBACK_MS };
+// "Run" range picker. null = normal run (new since the last run).
+const RANGE_OPTIONS = [
+  { days: null, label: 'New since last run' },
+  { days: 3, label: 'Last 3 days' },
+  { days: 7, label: 'Last 7 days' },
+  { days: 14, label: 'Last 14 days' },
+  { days: 30, label: 'Last 30 days' },
+];
+// Ask before importing when the range is this long; the size shown is a rough estimate.
+const CONFIRM_FROM_DAYS = 7;
+// Measured on the first real run (2026-10-18): 17 files, 39.4 MB.
+const AVG_MB_PER_FILE = 2.3;
+
+module.exports = {
+  DEFAULT_SOURCES, RUN_EVERY_MS, CHECK_EVERY_MS, FIRST_RUN_LOOKBACK_MS, LOOKBACK_SLACK_MS, MAX_LOOKBACK_MS,
+  RANGE_OPTIONS, CONFIRM_FROM_DAYS, AVG_MB_PER_FILE,
+};

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createStore } = require('../js/store');
-const { runSource, isDue, sinceFor } = require('../js/runner');
+const { runSource, planSource, importPlan, isDue, sinceFor } = require('../js/runner');
 
 const NOW = Date.parse('2026-10-18T00:00:00Z');
 const HOUR = 3600e3;
@@ -89,6 +89,29 @@ test('an empty page flags the source instead of silently succeeding', async () =
   assert.match(res.error, /layout may have changed/);
   const status = store.library('/lib/A').status[source.id];
   assert.ok(!status.lastSuccessAt && status.lastError);
+});
+
+test('"last X days" reaches past the normal window, imports oldest first, and can be stopped', async () => {
+  const html = vibrantHtml([
+    { id: 'd1', name: 'One day', x: '1', at: NOW - 1 * 24 * HOUR },
+    { id: 'd5', name: 'Five days', x: '5', at: NOW - 5 * 24 * HOUR },
+    { id: 'd9', name: 'Nine days', x: '9', at: NOW - 9 * 24 * HOUR },
+  ]);
+  const { store, added, ctx } = setup({ 'vibrant.design': html });
+  const source = store.data.sources.find((s) => s.url.includes('vibrant'));
+
+  const plan = await planSource(source, { ...ctx, days: 7 });
+  assert.deepStrictEqual(plan.items.map((i) => i.id), ['d5', 'd1']);
+  assert.strictEqual(plan.files, 2);
+
+  let calls = 0;
+  const res = await importPlan(plan, { ...ctx, shouldStop: () => calls++ >= 1 });
+  assert.strictEqual(res.stopped, true);
+  assert.deepStrictEqual(added.map((a) => a.opts.name), ['Five days']);
+  assert.ok(!store.library('/lib/A').status[source.id].lastSuccessAt, 'a stopped run does not count as a full run');
+
+  const rest = await runSource(source, { ...ctx, days: 7 });
+  assert.strictEqual(rest.imported, 1, 'continues where it stopped');
 });
 
 test('schedule: daily runs, hourly retries after failure, bounded lookback', () => {

@@ -41,9 +41,28 @@ function toTime(value) {
   return Number.isFinite(t) ? t : null;
 }
 
+// Oldest publish time on a page; -Infinity when nothing is dated, so paging stops.
+function oldestOf(items) {
+  const times = items.map((it) => it.publishedAt).filter(Number.isFinite);
+  return times.length ? Math.min(...times) : -Infinity;
+}
+
+async function mapLimit(list, size, fn) {
+  const out = new Array(list.length);
+  let next = 0;
+  async function worker() {
+    while (next < list.length) {
+      const i = next++;
+      out[i] = await fn(list[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(size, list.length) }, worker));
+  return out;
+}
+
 function cleanTitle(text, max = 80) {
   const line = String(text || '').replace(/https?:\/\/\S+/g, '').split('\n').map((s) => s.trim()).find(Boolean) || '';
   return line.length > max ? `${line.slice(0, max - 1).trim()}…` : line;
 }
 
-module.exports = { MAX_VIDEO_SHORT_EDGE, USER_AGENT, fetchText, xStatusId, pickVideo, pickImage, toTime, cleanTitle };
+module.exports = { MAX_VIDEO_SHORT_EDGE, USER_AGENT, fetchText, xStatusId, pickVideo, pickImage, toTime, cleanTitle, oldestOf, mapLimit };

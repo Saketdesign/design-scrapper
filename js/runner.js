@@ -18,7 +18,9 @@ function isDue(status = {}, now = Date.now()) {
   return !status.lastSuccessAt || now - status.lastSuccessAt >= RUN_EVERY_MS - 5 * 60e3;
 }
 
-function sinceFor(status = {}, now = Date.now()) {
+// `days` is a manual "last X days" run; otherwise pick up from the last successful run.
+function sinceFor(status = {}, now = Date.now(), days = null) {
+  if (days) return now - days * 24 * 3600e3;
   const since = status.lastSuccessAt ? status.lastSuccessAt - LOOKBACK_SLACK_MS : now - FIRST_RUN_LOOKBACK_MS;
   return Math.max(since, now - MAX_LOOKBACK_MS);
 }
@@ -70,25 +72,56 @@ async function pool(tasks, size) {
   return results;
 }
 
-// Fetch one source, import its new posts, and record the outcome in the library's state.
-async function runSource(source, ctx) {
-  const { store, libraryPath, eagleItem, fetch, tmpDir, now = Date.now(), log = () => {} } = ctx;
+function labelFor(source, adapter) {
+  return adapter.id === 'generic' ? new URL(source.url).hostname.replace(/^www\./, '') : adapter.label;
+}
+
+// Step 1: fetch a source and work out which posts are new. Throws if the source fails.
+async function planSource(source, ctx) {
+  const { store, libraryPath, fetch, now = Date.now(), days = null } = ctx;
   const lib = store.library(libraryPath);
   const adapter = adapterFor(source.url);
-  const label = adapter.id === 'generic' ? new URL(source.url).hostname.replace(/^www\./, '') : adapter.label;
+  const status = lib.status[source.id] || {};
+  const since = sinceFor(status, now, days);
+  const isKnown = (id) => Boolean(lib.seen[`${adapter.id}:${id}`]);
+  const items = await adapter.fetchItems(source.url, { fetch, since, isKnown });
+  if (!items.length && adapter.id !== 'generic') {
+    throw new Error('The site returned no designs. Its layout may have changed.');
+  }
+  const unique = [...new Map(items.map((it) => [it.id, it])).values()];
+  const fresh = unique.filter((it) => !it.publishedAt || it.publishedAt >= since);
+  // Oldest first, so the newest designs end up on top when Eagle sorts by date added.
+  const unseen = fresh
+    .filter((it) => !keysFor(adapter.id, it).some((k) => lib.seen[k]))
+    .sort((a, b) => (a.publishedAt || 0) - (b.publishedAt || 0));
+  return { source, adapter, label: labelFor(source, adapter), items: unseen, files: unseen.reduce((n, it) => n + it.media.length, 0) };
+}
+
+function recordFailure(source, err, ctx) {
+  const { store, libraryPath, now = Date.now(), log = () => {} } = ctx;
+  const lib = store.library(libraryPath);
+  lib.status[source.id] = { ...lib.status[source.id], lastAttemptAt: now, lastError: err.message };
+  log(`${labelFor(source, adapterFor(source.url))}: ${err.message}`);
+  store.save();
+}
+
+// Step 2: download and import the planned posts, then record the outcome.
+async function importPlan(plan, ctx) {
+  const { store, libraryPath, eagleItem, fetch, tmpDir, now = Date.now(), log = () => {}, shouldStop = () => false, onProgress = () => {} } = ctx;
+  const { source, adapter, label } = plan;
+  const lib = store.library(libraryPath);
   const status = (lib.status[source.id] = { ...lib.status[source.id], lastAttemptAt: now });
-  const result = { sourceId: source.id, label, imported: 0, posts: 0, failed: 0, error: null };
+  const result = { sourceId: source.id, label, imported: 0, posts: 0, failed: 0, total: plan.items.length, done: 0, stopped: false, error: null };
+  onProgress(result);
 
   try {
-    const since = sinceFor(status, now);
-    const items = await adapter.fetchItems(source.url, { fetch, since });
-    if (!items.length && adapter.id !== 'generic') {
-      throw new Error('The site returned no designs. Its layout may have changed.');
-    }
-    const fresh = items.filter((it) => !it.publishedAt || it.publishedAt >= since);
-    const unseen = fresh.filter((it) => !keysFor(adapter.id, it).some((k) => lib.seen[k]));
-
-    for (const item of unseen) {
+    for (const item of plan.items) {
+      if (shouldStop()) {
+        result.stopped = true;
+        break;
+      }
+      result.done += 1;
+      onProgress(result);
       const website = item.postUrl || item.pageUrl;
       if (item.postUrl && (await eagleItem.count({ url: website })) > 0) {
         for (const k of keysFor(adapter.id, item)) lib.seen[k] = now;
@@ -119,9 +152,11 @@ async function runSource(source, ctx) {
       for (const k of keysFor(adapter.id, item)) lib.seen[k] = now;
       result.imported += ids.length;
       result.posts += 1;
-      store.addActivity(lib, { at: now, sourceId: source.id, label, title: item.title, itemId: ids[0], count: ids.length });
+      store.addActivity(lib, { at: Date.now(), sourceId: source.id, label, title: item.title, itemId: ids[0], count: ids.length });
+      // Save as we go so a long backfill that gets interrupted doesn't re-import.
+      if (result.posts % 10 === 0) store.save();
     }
-    Object.assign(status, { lastSuccessAt: now, lastImported: result.imported, lastError: null });
+    Object.assign(status, result.stopped ? { lastImported: result.imported, lastError: null } : { lastSuccessAt: now, lastImported: result.imported, lastError: null });
   } catch (err) {
     result.error = err.message;
     status.lastError = err.message;
@@ -132,4 +167,16 @@ async function runSource(source, ctx) {
   return result;
 }
 
-module.exports = { runSource, isDue, sinceFor, extFor, tagsFor, annotationFor };
+// Fetch one source, import its new posts, and record the outcome in the library's state.
+async function runSource(source, ctx) {
+  let plan;
+  try {
+    plan = await planSource(source, ctx);
+  } catch (err) {
+    recordFailure(source, err, ctx);
+    return { sourceId: source.id, label: labelFor(source, adapterFor(source.url)), imported: 0, posts: 0, failed: 0, error: err.message };
+  }
+  return importPlan(plan, ctx);
+}
+
+module.exports = { runSource, planSource, importPlan, recordFailure, labelFor, isDue, sinceFor, extFor, tagsFor, annotationFor };

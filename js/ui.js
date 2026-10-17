@@ -21,7 +21,13 @@
   }
 
   function statusLine(app, source, status) {
-    if (app.state.current === source.id) return { cls: 'running', text: 'Scraping…' };
+    const { state } = app;
+    if (state.current === source.id) {
+      if (state.stopRequested) return { cls: 'running', text: 'Stopping after this design…' };
+      if (state.phase === 'checking') return { cls: 'running', text: 'Looking for new designs…' };
+      const p = state.progress;
+      return { cls: 'running', text: p && p.total ? `Importing ${p.done} of ${p.total}…` : 'Importing…' };
+    }
     if (status && status.lastError) return { cls: 'error', text: `Needs attention: ${status.lastError}` };
     if (!source.enabled) return { cls: '', text: 'Paused' };
     if (!status || !status.lastSuccessAt) return { cls: '', text: 'Not run yet · runs on the next check' };
@@ -76,9 +82,13 @@
   }
 
   function render(app) {
+    const { running, stopRequested } = app.state;
     const runAll = $('runAll');
-    runAll.disabled = app.state.running;
-    runAll.textContent = app.state.running ? 'Running…' : 'Run all now';
+    runAll.disabled = running && stopRequested;
+    runAll.textContent = running ? (stopRequested ? 'Stopping…' : 'Stop') : 'Run all now';
+    runAll.classList.toggle('stop', running);
+    runAll.classList.toggle('primary', !running);
+    $('range').disabled = running;
     renderSources(app);
     renderActivity(app);
   }
@@ -94,13 +104,17 @@
     eagle.onPluginShow(() => render(app));
     setInterval(() => render(app), 60e3);
 
-    $('runAll').addEventListener('click', () => app.runNow());
+    const range = $('range');
+    range.innerHTML = app.rangeOptions.map((o) => `<option value="${o.days ?? ''}">${esc(o.label)}</option>`).join('');
+    const days = () => Number(range.value) || null;
+
+    $('runAll').addEventListener('click', () => (app.state.running ? app.stop() : app.runNow(null, days())));
 
     $('sources').addEventListener('click', (e) => {
       const action = e.target.closest('[data-action]')?.dataset.action;
       const id = e.target.closest('[data-id]')?.dataset.id;
       if (!id || action === 'toggle') return;
-      if (action === 'run') app.runNow(id);
+      if (action === 'run') app.runNow(id, days());
       if (action === 'remove') app.removeSource(id);
     });
     $('sources').addEventListener('change', (e) => {
