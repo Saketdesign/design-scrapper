@@ -1,0 +1,18 @@
+{
+    "id": "MFTOOHG07KF3J",
+    "version": "1.0.0",
+    "platform": "all",
+    "arch": "all",
+    "name": "Design Scrapper",
+    "logo": "/logo.png",
+    "keywords": ["design", "inspiration", "ui", "scraper", "daily"],
+    "devTools": false,
+    "main": {
+        "serviceMode": true,
+        "url": "index.html",
+        "width": 760,
+        "height": 620,
+        "minWidth": 560,
+        "minHeight": 420
+    }
+}

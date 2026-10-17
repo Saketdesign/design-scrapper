@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Design Scrapper</title>
+    <link rel="stylesheet" href="css/app.css">
+    <script type="text/javascript" src="js/main.js"></script>
+    <script type="text/javascript" src="js/ui.js" defer></script>
+</head>
+
+<body>
+    <div class="app">
+        <header class="header">
+            <div>
+                <h1>Design Scrapper</h1>
+                <p class="muted">New UI designs from your sources, once a day, into Uncategorized.</p>
+            </div>
+            <button id="runAll" class="btn primary">Run all now</button>
+        </header>
+
+        <section>
+            <div class="section-title">
+                <h2>Sources</h2>
+                <span id="sourceCount" class="muted"></span>
+            </div>
+            <ul id="sources" class="list"></ul>
+            <form id="addForm" class="add">
+                <input id="addUrl" type="text" placeholder="Paste a website link, e.g. https://vibrant.design/" autocomplete="off" spellcheck="false">
+                <button class="btn" type="submit">Add source</button>
+            </form>
+            <p id="addError" class="error" hidden></p>
+        </section>
+
+        <section>
+            <div class="section-title">
+                <h2>Recent imports</h2>
+            </div>
+            <ul id="activity" class="list activity"></ul>
+        </section>
+
+        <footer class="muted">Runs while Eagle is open: checks every hour, scrapes each source once every 24 hours.</footer>
+    </div>
+</body>
+</html>
