@@ -1,0 +1,1 @@
+dAccessToken!==n?this.changedAccessToken=n:e==="SIGNED_OUT"&&(this.realtime.setAuth(),r=="STORAGE"&&this.auth.signOut(),this.changedAccessToken=void 0)}}const Y3=(t,e,r)=>new X3(t,e,r),Ze=Y3("https://tuzpqmdnxvlzwqthgseg.supabase.co","eyJFAKE.test.key"),Am="bdox-sound-enabled";function J3(){const t=Xr.get(x0);return Mk(t)?t:Ok}var Jl,Ql,Zl,$l,ec,tc,r
