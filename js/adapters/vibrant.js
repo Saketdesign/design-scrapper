@@ -4,7 +4,7 @@ const { fetchText, xStatusId, pickVideo, pickImage, toTime, oldestOf, mapLimit }
 const ORIGIN = 'https://vibrant.design';
 // Older posts come from the sitemap plus each post's page; the site's "load more" lives under
 // /api/, which robots.txt disallows.
-const MAX_DETAIL_PAGES = 400;
+const MAX_DETAIL_PAGES = 2000;
 const DETAIL_CONCURRENCY = 2;
 
 // The homepage mixes categories; the feed with a category filter returns only that category.
@@ -97,7 +97,7 @@ module.exports = {
     const url = feedUrl(sourceUrl);
     const category = new URL(url).searchParams.get('category');
     let items = parse(await fetchText(fetch, url));
-    if (since && items.length && oldestOf(items) > since) {
+    if (since != null && items.length && oldestOf(items) > since) {
       const onPage = new Set(items.map((it) => it.id));
       items = items.concat(await olderItems(fetch, since, (id) => onPage.has(id) || isKnown(id)));
     }

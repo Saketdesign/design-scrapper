@@ -106,7 +106,7 @@
 
     const range = $('range');
     range.innerHTML = app.rangeOptions.map((o) => `<option value="${o.days ?? ''}">${esc(o.label)}</option>`).join('');
-    const days = () => Number(range.value) || null;
+    const days = () => (range.value === 'all' ? 'all' : Number(range.value) || null);
 
     $('runAll').addEventListener('click', () => (app.state.running ? app.stop() : app.runNow(null, days())));
 

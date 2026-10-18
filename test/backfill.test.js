@@ -71,6 +71,48 @@ test('vibrant.design: reaches older posts through the sitemap and post pages, sk
   assert.ok(!fetch.calls.some((c) => c.url.includes('/api/')), 'never touches the robots-disallowed API');
 });
 
+test('all time (since 0): recent pages to the end, vibrant reads the whole sitemap', async () => {
+  const first = recent.parsePage(fixture('recent.html'));
+  const old = (id) => ({ id, slug: 's', title: 'Old', status: 'published', publishedAt: Date.parse('2024-01-01'), media: [{ mediaType: 'image', url: 'https://cdn/x.webp', mediaWidth: 1, mediaHeight: 1 }] });
+  let apiCalls = 0;
+  const recentFetch = fakeFetch([
+    ['https://recent.design/', fixture('recent.html')],
+    ['https://api.recent.design/rpc/items/list', () => {
+      apiCalls += 1;
+      return { json: { items: [old(`o${apiCalls}`)], nextCursor: apiCalls < 3 ? `c${apiCalls}` : null } };
+    }],
+  ]);
+  const all = await recent.fetchItems('https://recent.design/?category=interface', { fetch: recentFetch, since: 0 });
+  assert.strictEqual(apiCalls, 3, 'keeps paging until the site has no more pages');
+  assert.strictEqual(all.length, first.items.length + 3);
+
+  const vibrantFetch = fakeFetch([
+    ['https://vibrant.design/feed?', '<script class="$tsr">$R[0]={items:$R[1]=[]}</script>'.replace('[]', '[$R[2]={shortId:"n1",name:"N",publishedAt:"2026-10-17T00:00:00Z",videos:[{url:"https://cdn/v.mp4",width:1,height:1}],images:[],categories:[],tags:[]}]')],
+    ['https://vibrant.design/sitemap.xml', '<loc>https://vibrant.design/sitemaps/projects-1.xml</loc>'],
+    ['https://vibrant.design/sitemaps/projects-1.xml', '<urlset><url><loc>https://vibrant.design/feed/bc1ir7v-aquarium</loc><lastmod>2025-01-01T00:00:00Z</lastmod></url></urlset>'],
+    ['https://vibrant.design/feed/bc1ir7v', fixture('vibrant-post.html')],
+  ]);
+  const v = await vibrant.fetchItems('https://vibrant.design/', { fetch: vibrantFetch, since: 0 });
+  assert.deepStrictEqual(v.map((i) => i.id), ['n1', 'bc1ir7v']);
+});
+
+test('all time (since 0): bestdesignsonx drops the date filter, so undated posts come too', async () => {
+  const seen = [];
+  const fetch = fakeFetch([
+    ['https://bestdesignsonx.com/assets/index-x.js', fixture('bestdesignsonx-bundle.txt')],
+    ['https://bestdesignsonx.com/', '<script type="module" src="/assets/index-x.js"></script>'],
+    ['https://tuzpqmdnxvlzwqthgseg.supabase.co/rest/v1/', (url) => {
+      const params = new URL(url).searchParams;
+      seen.push(params);
+      const offset = Number(params.get('offset'));
+      return Array.from({ length: offset < 400 ? 200 : 0 }, (_, i) => ({ id: offset + i, handle: 'a', tweet_text: 'Sidebar UI', post_url: `/a/status/${offset + i}`, status: 'Published', published_at: null, tags: [], media: [{ type: 'photo', image: 'https://cdn/x.avif' }] }));
+    }],
+  ]);
+  const items = await bdx.fetchItems('https://bestdesignsonx.com/', { fetch, since: 0 });
+  assert.strictEqual(items.length, 400);
+  assert.ok(seen.every((p) => !p.has('published_at')));
+});
+
 test('vibrant.design: many failed post pages flag the source instead of returning less', async () => {
   const urls = Array.from({ length: 8 }, (_, i) => `<url><loc>https://vibrant.design/feed/p${i}-x</loc><lastmod>2026-10-10T00:00:00Z</lastmod></url>`);
   const fetch = fakeFetch([

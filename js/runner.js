@@ -18,8 +18,10 @@ function isDue(status = {}, now = Date.now()) {
   return !status.lastSuccessAt || now - status.lastSuccessAt >= RUN_EVERY_MS - 5 * 60e3;
 }
 
-// `days` is a manual "last X days" run; otherwise pick up from the last successful run.
+// `days` is a manual "last X days" run ('all' = no limit, returned as 0); otherwise pick up
+// from the last successful run.
 function sinceFor(status = {}, now = Date.now(), days = null) {
+  if (days === 'all') return 0;
   if (days) return now - days * 24 * 3600e3;
   const since = status.lastSuccessAt ? status.lastSuccessAt - LOOKBACK_SLACK_MS : now - FIRST_RUN_LOOKBACK_MS;
   return Math.max(since, now - MAX_LOOKBACK_MS);
@@ -94,7 +96,9 @@ async function planSource(source, ctx) {
   const unseen = fresh
     .filter((it) => !keysFor(adapter.id, it).some((k) => lib.seen[k]))
     .sort((a, b) => (a.publishedAt || 0) - (b.publishedAt || 0));
-  return { source, adapter, label: labelFor(source, adapter), items: unseen, files: unseen.reduce((n, it) => n + it.media.length, 0) };
+  const media = unseen.flatMap((it) => it.media);
+  const videos = media.filter((m) => m.type === 'video').length;
+  return { source, adapter, label: labelFor(source, adapter), items: unseen, files: media.length, videos, images: media.length - videos };
 }
 
 function recordFailure(source, err, ctx) {

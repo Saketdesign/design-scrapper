@@ -3,7 +3,7 @@ const { fetchText, xStatusId, toTime, cleanTitle } = require('./util');
 const ORIGIN = 'https://bestdesignsonx.com';
 const TABLE = 'bestdesignsonx';
 const PAGE_ROWS = 200;
-const MAX_ROWS = 3000;
+const MAX_ROWS = 20000;
 
 // The site tags every post. These tags mark non-UI work (identity, type, art); a post is kept
 // when it has at least one tag outside this list, e.g. ui-interaction, sidebar, dropdown.
@@ -100,7 +100,8 @@ module.exports = {
       if (!res.ok) throw new Error(`bestdesignsonx data endpoint responded ${res.status}`);
       const page = await res.json();
       rows.push(...page);
-      if (page.length < PAGE_ROWS || !since) break;
+      // No `since` = first page only; since 0 (all time) pages through everything.
+      if (page.length < PAGE_ROWS || since == null) break;
     }
     return parse(rows);
   },

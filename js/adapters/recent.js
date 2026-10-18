@@ -5,7 +5,7 @@ const ORIGIN = 'https://recent.design';
 // The site's own "load more" endpoint (oRPC), used only to page back past the first page.
 const API = 'https://api.recent.design/rpc/items/list';
 const PAGE_SIZE = 20;
-const MAX_PAGES = 40;
+const MAX_PAGES = 150;
 
 function feedUrl(sourceUrl) {
   const url = new URL(sourceUrl);
@@ -76,7 +76,7 @@ module.exports = {
     const url = feedUrl(sourceUrl);
     const category = new URL(url).searchParams.get('category');
     let { items, nextCursor } = parsePage(await fetchText(fetch, url));
-    for (let page = 1; nextCursor && since && oldestOf(items) >= since && page < MAX_PAGES; page++) {
+    for (let page = 1; nextCursor && since != null && oldestOf(items) >= since && page < MAX_PAGES; page++) {
       const next = await fetchPage(fetch, category, nextCursor);
       items = items.concat(next.items);
       nextCursor = next.nextCursor;

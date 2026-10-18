@@ -8,7 +8,7 @@ eagle.onPluginCreate(async (plugin) => {
   const load = (file) => require(path.join(plugin.path, 'js', file));
   const { createStore } = load('store.js');
   const { planSource, importPlan, recordFailure, labelFor, isDue } = load('runner.js');
-  const { CHECK_EVERY_MS, RANGE_OPTIONS, CONFIRM_FROM_DAYS, AVG_MB_PER_FILE } = load('defaults.js');
+  const { CHECK_EVERY_MS, RANGE_OPTIONS, CONFIRM_FROM_DAYS, AVG_MB_PER_VIDEO, AVG_MB_PER_IMAGE } = load('defaults.js');
   const { adapterFor } = load('adapters/index.js');
 
   const dataDir = path.join(eagle.app.userDataPath || eagle.os.homedir(), 'design-scrapper');
@@ -24,13 +24,22 @@ eagle.onPluginCreate(async (plugin) => {
     const posts = plans.reduce((n, p) => n + p.items.length, 0);
     const files = plans.reduce((n, p) => n + p.files, 0);
     if (!posts) return true;
-    const mb = files * AVG_MB_PER_FILE;
+    const sum = (key) => plans.reduce((n, p) => n + p[key], 0);
+    const mb = sum('videos') * AVG_MB_PER_VIDEO + sum('images') * AVG_MB_PER_IMAGE;
     const size = mb >= 1000 ? `${(mb / 1000).toFixed(1)} GB` : `${Math.round(mb)} MB`;
+    const n = (x) => x.toLocaleString('en-US');
+    const lines = [
+      plans.filter((p) => p.items.length).map((p) => `${p.label}: ${n(p.items.length)}`).join('\n'),
+      `${n(files)} files, roughly ${size} (estimated from the average file sizes so far). They go to Uncategorized.`,
+      files > 1000
+        ? 'This can take hours and Eagle needs to stay open. Stop keeps everything already imported, and running it again continues where it left off.'
+        : 'You can stop at any time.',
+    ];
     const { response } = await eagle.dialog.showMessageBox({
       type: 'question',
       title: 'Design Scrapper',
-      message: `Import ${posts} designs from the last ${days} days?`,
-      detail: `${plans.filter((p) => p.items.length).map((p) => `${p.label}: ${p.items.length}`).join('\n')}\n\n${files} files, roughly ${size} (estimated from the average file size so far). They go to Uncategorized. You can stop at any time.`,
+      message: `Import ${n(posts)} designs from ${days === 'all' ? 'all time' : `the last ${days} days`}?`,
+      detail: lines.join('\n\n'),
       buttons: ['Import', 'Cancel'],
     });
     return response === 0;
@@ -67,7 +76,8 @@ eagle.onPluginCreate(async (plugin) => {
           results.push({ sourceId: source.id, label: labelFor(source, adapterFor(source.url)), imported: 0, error: err.message });
         }
       }
-      if (days >= CONFIRM_FROM_DAYS && !(await confirmBackfill(plans, days))) return results;
+      const needsConfirm = days === 'all' || days >= CONFIRM_FROM_DAYS;
+      if (needsConfirm && !(await confirmBackfill(plans, days))) return results;
       state.phase = 'importing';
       for (const plan of plans) {
         if (state.stopRequested) break;

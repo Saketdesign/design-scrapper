@@ -120,6 +120,8 @@ test('schedule: daily runs, hourly retries after failure, bounded lookback', () 
   assert.strictEqual(isDue({ lastSuccessAt: NOW - 24 * HOUR, lastAttemptAt: NOW - 24 * HOUR }, NOW), true);
   assert.strictEqual(isDue({ lastSuccessAt: NOW - 30 * HOUR, lastAttemptAt: NOW - 10 * 60e3 }, NOW), false);
   assert.strictEqual(sinceFor(undefined, NOW), NOW - 24 * HOUR);
+  assert.strictEqual(sinceFor({ lastSuccessAt: NOW - HOUR }, NOW, 'all'), 0);
+  assert.strictEqual(sinceFor(undefined, NOW, 30), NOW - 30 * 24 * HOUR);
   assert.strictEqual(sinceFor({ lastSuccessAt: NOW - 24 * HOUR }, NOW), NOW - 30 * HOUR);
   assert.strictEqual(sinceFor({ lastSuccessAt: NOW - 60 * 24 * HOUR }, NOW), NOW - 14 * 24 * HOUR);
 });
