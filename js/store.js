@@ -53,6 +53,13 @@ function createStore(dir) {
     save();
   }
 
+  // Put a removed source back where it was (Undo). Its run status is still in each library.
+  function restoreSource(source, index) {
+    if (data.sources.some((s) => s.id === source.id || s.url === source.url)) return;
+    data.sources.splice(Math.min(index, data.sources.length), 0, source);
+    save();
+  }
+
   function setEnabled(id, enabled) {
     const s = data.sources.find((x) => x.id === id);
     if (s) s.enabled = enabled;
@@ -78,6 +85,7 @@ function createStore(dir) {
     library,
     addSource,
     removeSource,
+    restoreSource,
     setEnabled,
     pruneSeen,
     addActivity,

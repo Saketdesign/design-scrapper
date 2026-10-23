@@ -8,13 +8,17 @@ eagle.onPluginCreate(async (plugin) => {
   const load = (file) => require(path.join(plugin.path, 'js', file));
   const { createStore } = load('store.js');
   const { planSource, importPlan, recordFailure, labelFor, isDue } = load('runner.js');
-  const { CHECK_EVERY_MS, RANGE_OPTIONS, CONFIRM_FROM_DAYS, AVG_MB_PER_VIDEO, AVG_MB_PER_IMAGE } = load('defaults.js');
+  const { DEFAULT_SOURCES, CHECK_EVERY_MS, RANGE_OPTIONS, CONFIRM_FROM_DAYS, AVG_MB_PER_VIDEO, AVG_MB_PER_IMAGE } = load('defaults.js');
   const { adapterFor } = load('adapters/index.js');
 
   const dataDir = path.join(eagle.app.userDataPath || eagle.os.homedir(), 'design-scrapper');
   const store = createStore(dataDir);
   const listeners = new Set();
-  const state = { running: false, phase: null, current: null, progress: null, stopRequested: false };
+  const runDoneListeners = new Set();
+  // queue: source ids in this run; planned: new posts found per source; results: outcome per finished source.
+  const state = { running: false, phase: null, current: null, progress: null, stopRequested: false, queue: [], planned: {}, results: {} };
+  // The Sources window registers an in-window confirm; the native dialog is the fallback.
+  let confirmInWindow = null;
 
   const emit = () => listeners.forEach((fn) => fn());
   const libraryPath = () => eagle.library.path;
@@ -28,17 +32,28 @@ eagle.onPluginCreate(async (plugin) => {
     const mb = sum('videos') * AVG_MB_PER_VIDEO + sum('images') * AVG_MB_PER_IMAGE;
     const size = mb >= 1000 ? `${(mb / 1000).toFixed(1)} GB` : `${Math.round(mb)} MB`;
     const n = (x) => x.toLocaleString('en-US');
+    const title = `Import ${n(posts)} designs from ${days === 'all' ? 'all time' : `the last ${days} days`}?`;
+    const note =
+      files > 1000
+        ? 'This can take hours and Eagle needs to stay open. Stop keeps everything already imported, and running it again continues where it left off.'
+        : 'You can stop at any time.';
+    if (confirmInWindow) {
+      return confirmInWindow({
+        title,
+        rows: plans.filter((p) => p.items.length).map((p) => ({ label: p.label, value: n(p.items.length) })),
+        detail: `${n(files)} files, roughly ${size}. They go to Uncategorized. ${note}`,
+        confirmLabel: 'Import',
+      });
+    }
     const lines = [
       plans.filter((p) => p.items.length).map((p) => `${p.label}: ${n(p.items.length)}`).join('\n'),
       `${n(files)} files, roughly ${size} (estimated from the average file sizes so far). They go to Uncategorized.`,
-      files > 1000
-        ? 'This can take hours and Eagle needs to stay open. Stop keeps everything already imported, and running it again continues where it left off.'
-        : 'You can stop at any time.',
+      note,
     ];
     const { response } = await eagle.dialog.showMessageBox({
       type: 'question',
       title: 'Design Scrapper',
-      message: `Import ${n(posts)} designs from ${days === 'all' ? 'all time' : `the last ${days} days`}?`,
+      message: title,
       detail: lines.join('\n\n'),
       buttons: ['Import', 'Cancel'],
     });
@@ -47,7 +62,7 @@ eagle.onPluginCreate(async (plugin) => {
 
   async function run(sources, { manual = false, days = null } = {}) {
     if (state.running || !sources.length) return null;
-    Object.assign(state, { running: true, phase: 'checking', stopRequested: false, progress: null });
+    Object.assign(state, { running: true, phase: 'checking', stopRequested: false, progress: null, queue: sources.map((s) => s.id), planned: {}, results: {} });
     emit();
     const ctx = {
       store,
@@ -70,27 +85,39 @@ eagle.onPluginCreate(async (plugin) => {
         state.current = source.id;
         emit();
         try {
-          plans.push(await planSource(source, ctx));
+          const plan = await planSource(source, ctx);
+          state.planned[source.id] = plan.items.length;
+          plans.push(plan);
         } catch (err) {
           recordFailure(source, err, ctx);
-          results.push({ sourceId: source.id, label: labelFor(source, adapterFor(source.url)), imported: 0, error: err.message });
+          const result = { sourceId: source.id, label: labelFor(source, adapterFor(source.url)), imported: 0, error: err.message };
+          state.results[source.id] = result;
+          results.push(result);
         }
       }
       const needsConfirm = days === 'all' || days >= CONFIRM_FROM_DAYS;
-      if (needsConfirm && !(await confirmBackfill(plans, days))) return results;
+      if (needsConfirm) {
+        state.phase = 'confirming';
+        state.current = null;
+        emit();
+        if (!(await confirmBackfill(plans, days))) return results;
+      }
       state.phase = 'importing';
       for (const plan of plans) {
         if (state.stopRequested) break;
         state.current = plan.source.id;
         state.progress = null;
         emit();
-        results.push(await importPlan(plan, ctx));
+        const result = await importPlan(plan, ctx);
+        state.results[plan.source.id] = result;
+        results.push(result);
       }
     } finally {
-      Object.assign(state, { running: false, phase: null, current: null, progress: null });
+      Object.assign(state, { running: false, phase: null, current: null, progress: null, queue: [], planned: {}, results: {} });
       emit();
     }
     await notify(results, manual);
+    runDoneListeners.forEach((fn) => fn(results, { manual }));
     return results;
   }
 
@@ -124,9 +151,18 @@ eagle.onPluginCreate(async (plugin) => {
     adapterFor,
     libraryPath,
     rangeOptions: RANGE_OPTIONS,
+    defaultSources: DEFAULT_SOURCES,
+    labelFor: (source) => labelFor(source, adapterFor(source.url)),
     onChange: (fn) => listeners.add(fn),
-    runNow: (sourceId, days = null) =>
-      run(store.data.sources.filter((s) => (sourceId ? s.id === sourceId : s.enabled)), { manual: true, days }),
+    onRunDone: (fn) => runDoneListeners.add(fn),
+    setConfirm: (fn) => {
+      confirmInWindow = fn;
+    },
+    // sourceIds: one id, a list of ids, or null for every enabled source.
+    runNow: (sourceIds, days = null) => {
+      const ids = sourceIds == null ? null : [].concat(sourceIds);
+      return run(store.data.sources.filter((s) => (ids ? ids.includes(s.id) : s.enabled)), { manual: true, days });
+    },
     stop: () => {
       state.stopRequested = true;
       emit();
@@ -138,6 +174,10 @@ eagle.onPluginCreate(async (plugin) => {
     },
     removeSource: (id) => {
       store.removeSource(id);
+      emit();
+    },
+    restoreSource: (source, index) => {
+      store.restoreSource(source, index);
       emit();
     },
     setEnabled: (id, on) => {
