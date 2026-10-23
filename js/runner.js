@@ -87,7 +87,7 @@ async function planSource(source, ctx) {
   const since = sinceFor(status, now, days);
   const isKnown = (id) => Boolean(lib.seen[`${adapter.id}:${id}`]);
   const items = await adapter.fetchItems(source.url, { fetch, since, isKnown });
-  if (!items.length && adapter.id !== 'generic') {
+  if (!items.length && adapter.id !== 'generic' && !adapter.allowsEmptyResults) {
     throw new Error('The site returned no designs. Its layout may have changed.');
   }
   const unique = [...new Map(items.map((it) => [it.id, it])).values()];

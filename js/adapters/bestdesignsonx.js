@@ -87,6 +87,8 @@ async function query(fetch, config, since, offset) {
 module.exports = {
   id: 'bestdesignsonx',
   label: 'bestdesignsonx.com',
+  // A successful API query may have no posts in the requested date range, or only non-UI posts.
+  allowsEmptyResults: true,
   matches: (url) => /(^|\.)bestdesignsonx\.com$/i.test(new URL(url).hostname),
   async fetchItems(_sourceUrl, { fetch, since }) {
     cachedConfig = cachedConfig || (await discoverConfig(fetch));
@@ -99,6 +101,7 @@ module.exports = {
       }
       if (!res.ok) throw new Error(`bestdesignsonx data endpoint responded ${res.status}`);
       const page = await res.json();
+      if (!Array.isArray(page)) throw new Error('bestdesignsonx data endpoint returned an invalid response');
       rows.push(...page);
       // No `since` = first page only; since 0 (all time) pages through everything.
       if (page.length < PAGE_ROWS || since == null) break;

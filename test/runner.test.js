@@ -91,6 +91,47 @@ test('an empty page flags the source instead of silently succeeding', async () =
   assert.ok(!status.lastSuccessAt && status.lastError);
 });
 
+test('bestdesignsonx: an empty date range succeeds and clears a previous error', async () => {
+  const { store, added, ctx } = setup({});
+  const source = store.data.sources.find((s) => s.url.includes('bestdesignsonx'));
+  const lib = store.library(ctx.libraryPath);
+  lib.status[source.id] = { lastSuccessAt: NOW - HOUR, lastError: 'The site returned no designs. Its layout may have changed.' };
+  const calls = [];
+  ctx.fetch = async (url) => {
+    calls.push(url);
+    if (url.includes('.supabase.co/rest/v1/')) return new Response('[]');
+    if (url.endsWith('.js')) return new Response(fs.readFileSync(`${__dirname}/fixtures/bestdesignsonx-bundle.txt`, 'utf8'));
+    return new Response('<script src="/assets/index-test.js"></script>');
+  };
+
+  const result = await runSource(source, ctx);
+  assert.strictEqual(result.error, null);
+  assert.strictEqual(result.imported, 0);
+  assert.strictEqual(added.length, 0);
+  assert.strictEqual(lib.status[source.id].lastSuccessAt, NOW);
+  assert.strictEqual(lib.status[source.id].lastError, null);
+  const query = new URL(calls.find((url) => url.includes('/rest/v1/')));
+  assert.strictEqual(query.searchParams.get('published_at'), `gte.${new Date(sinceFor({ lastSuccessAt: NOW - HOUR }, NOW)).toISOString()}`);
+});
+
+test('bestdesignsonx: failed and malformed API responses still flag the source', async () => {
+  const { store, ctx } = setup({});
+  const source = store.data.sources.find((s) => s.url.includes('bestdesignsonx'));
+  for (const [body, status, message] of [
+    ['unavailable', 503, /responded 503/],
+    ['{}', 200, /invalid response/],
+  ]) {
+    ctx.fetch = async (url) => {
+      if (url.includes('.supabase.co/rest/v1/')) return new Response(body, { status });
+      if (url.endsWith('.js')) return new Response(fs.readFileSync(`${__dirname}/fixtures/bestdesignsonx-bundle.txt`, 'utf8'));
+      return new Response('<script src="/assets/index-test.js"></script>');
+    };
+    const result = await runSource(source, ctx);
+    assert.match(result.error, message);
+    assert.ok(!store.library(ctx.libraryPath).status[source.id].lastSuccessAt);
+  }
+});
+
 test('"last X days" reaches past the normal window, imports oldest first, and can be stopped', async () => {
   const html = vibrantHtml([
     { id: 'd1', name: 'One day', x: '1', at: NOW - 1 * 24 * HOUR },
