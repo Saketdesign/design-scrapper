@@ -1,3 +1,5 @@
+const { appTag } = require('./app-folders');
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const normalized = (name) => String(name || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
 const https = (url) => { try { return new URL(url).protocol === 'https:'; } catch { return false; } };
@@ -46,7 +48,7 @@ function itemFor(current, screen, type, url) {
     description: `Selected by Mobbin MCP. Full app export from Chrome.${screen.versionDate ? ` App version: ${screen.versionDate}.` : ''}`,
     creator: { name: current.name, handle: '' }, postUrl: null,
     pageUrl: `https://mobbin.com/screens/${screen.id}`, publishedAt: null,
-    tags: ['ios', current.name, 'Mobbin', animation ? 'Animation' : 'Screen'], media: [{ type, url }],
+    tags: ['ios', current.name, appTag(current.name), 'Mobbin', animation ? 'Animation' : 'Screen'], media: [{ type, url }],
   };
 }
 

@@ -10,6 +10,7 @@ eagle.onPluginCreate(async (plugin) => {
   const { planSource, importPlan, recordFailure, labelFor, isDue } = load('runner.js');
   const { DEFAULT_SOURCES, CHECK_EVERY_MS, RANGE_OPTIONS, CONFIRM_FROM_DAYS, AVG_MB_PER_VIDEO, AVG_MB_PER_IMAGE } = load('defaults.js');
   const { adapterFor } = load('adapters/index.js');
+  const { organizeApps } = load('lib/app-folders.js');
 
   const dataDir = path.join(eagle.app.userDataPath || eagle.os.homedir(), 'design-scrapper');
   const store = createStore(dataDir);
@@ -133,6 +134,7 @@ eagle.onPluginCreate(async (plugin) => {
       Object.assign(state, { running: false, phase: null, current: null, progress: null, queue: [], planned: {}, results: {} });
       emit();
     }
+    await organize();
     await notify(results, manual);
     runDoneListeners.forEach((fn) => fn(results, { manual }));
     return results;
@@ -154,8 +156,13 @@ eagle.onPluginCreate(async (plugin) => {
     return store.data.sources.filter((s) => s.enabled && isDue(lib.status[s.id]));
   }
 
+  let organizing = null;
+  const organize = () => organizing || (organizing = organizeApps({ store, libraryPath: libraryPath(), eagleItem: eagle.item, smartFolder: eagle.smartFolder, log })
+    .finally(() => { organizing = null; }));
+
   async function tick() {
     try {
+      await organize();
       await run(dueSources());
     } catch (err) {
       log(`Scheduled run failed: ${err.message}`);
