@@ -5,8 +5,12 @@ const recent = require('../js/adapters/recent');
 const vibrant = require('../js/adapters/vibrant');
 const bdx = require('../js/adapters/bestdesignsonx');
 const generic = require('../js/adapters/generic');
+const sixtyfps = require('../js/adapters/sixtyfps');
+const appinspo = require('../js/adapters/appinspo');
+const inspora = require('../js/adapters/inspora');
+const { labelFor } = require('../js/runner');
 const { adapterFor } = require('../js/adapters');
-const { MAX_VIDEO_SHORT_EDGE } = require('../js/adapters/util');
+const { MAX_VIDEO_SHORT_EDGE, findSupabaseConfig } = require('../js/adapters/util');
 
 const fixture = (name) => fs.readFileSync(`${__dirname}/fixtures/${name}`, 'utf8');
 const shortEdge = (m) => Math.min(m.width, m.height);
@@ -15,7 +19,18 @@ test('routes source links to the right adapter', () => {
   assert.strictEqual(adapterFor('https://recent.design/?category=interface').id, 'recent');
   assert.strictEqual(adapterFor('https://vibrant.design/').id, 'vibrant');
   assert.strictEqual(adapterFor('https://www.bestdesignsonx.com/').id, 'bestdesignsonx');
+  assert.strictEqual(adapterFor('https://60fps.design/').id, '60fps');
+  assert.strictEqual(adapterFor('https://60fps.design/snippets').id, '60fps');
+  assert.strictEqual(adapterFor('https://mockup.60fps.design/').id, 'generic');
+  assert.strictEqual(adapterFor('https://appinspo.com').id, 'appinspo');
+  assert.strictEqual(adapterFor('https://inspora.design').id, 'inspora');
   assert.strictEqual(adapterFor('https://example.com/gallery').id, 'generic');
+});
+
+test('sources on one site get distinct labels', () => {
+  assert.strictEqual(labelFor({ url: 'https://60fps.design/' }, sixtyfps), '60fps.design');
+  assert.strictEqual(labelFor({ url: 'https://60fps.design/snippets' }, sixtyfps), '60fps.design/snippets');
+  assert.strictEqual(labelFor({ url: 'https://www.inspora.design/' }, inspora), 'inspora.design');
 });
 
 test('UI-only feed URLs', () => {
@@ -72,6 +87,76 @@ test('bestdesignsonx: reads the data endpoint from the site bundle', () => {
     url: 'https://tuzpqmdnxvlzwqthgseg.supabase.co',
     key: 'eyJFAKE.test.key',
   });
+});
+
+test('60fps: one item per shot, paired with its own video, no ads or nav links', () => {
+  const items = sixtyfps.parse(fixture('60fps.html'), 'https://60fps.design/');
+  assert.ok(items.length >= 25);
+  assert.strictEqual(new Set(items.map((it) => it.id)).size, items.length);
+  assert.ok(items.every((it) => /^shots\/[a-z0-9-]+$/.test(it.id) && it.id !== 'shots/watch'));
+  assert.ok(items.every((it) => it.media.length === 1 && /^https:\/\/video\.gumlet\.io\/.+\/main\.mp4$/.test(it.media[0].url)));
+  const first = items.find((it) => it.id === 'shots/apple-app-store-app-page-header-asset-animation');
+  assert.strictEqual(first.title, 'Apple App Store App Page Header Asset Animation');
+  assert.match(first.media[0].url, /6ad76a161ab4445ed4e6277c/);
+  assert.deepStrictEqual(first.tags, ['App Store']);
+  assert.strictEqual(first.pageUrl, 'https://60fps.design/shots/apple-app-store-app-page-header-asset-animation');
+});
+
+test('60fps: snippets and shot pages', () => {
+  const snippets = sixtyfps.parse(fixture('60fps-snippets.html'), 'https://60fps.design/snippets');
+  assert.deepStrictEqual(snippets.map((it) => it.id), [
+    'snippets/subscribe-button-change-interaction',
+    'snippets/cancel-button-expand-to-confirm-interaction',
+    'snippets/graph-scrub-highlight-glow-interaction',
+    'snippets/dropdown-menu-expand-morph-interaction',
+  ]);
+  assert.strictEqual(snippets[0].title, 'Subscribe Button Change Interaction');
+  assert.match(snippets[0].media[0].url, /6ad642e0e3f3cd8d1a457b91\/main\.mp4$/);
+  const detail = sixtyfps.parseDetail(fixture('60fps-shot.html'));
+  assert.strictEqual(detail.title, 'Apple App Store App Page Header Asset Animation');
+  assert.strictEqual(detail.publishedAt, Date.parse('2026-10-20T13:18:14.000Z'));
+  assert.match(detail.video, /main\.mp4$/);
+  assert.ok(detail.description);
+});
+
+test('appinspo: UI categories only, videos and X handles', () => {
+  const rows = JSON.parse(fixture('appinspo.json'));
+  const items = appinspo.parse(rows);
+  assert.ok(items.length > 0 && items.length < rows.length, 'drops the icons post');
+  assert.ok(items.every((it) => ['desktop', 'mobile', 'watch', 'vision'].includes(it.tags[0]) && it.publishedAt));
+  const video = items.find((it) => it.media[0].type === 'video');
+  assert.match(video.media[0].url, /\.mp4/);
+  assert.ok(items.some((it) => it.media[0].type === 'image'));
+  assert.ok(items.some((it) => it.creator.handle));
+  assert.deepStrictEqual(appinspo.categoriesFor('https://appinspo.com/tagged/icons'), ['icons']);
+  assert.deepStrictEqual(appinspo.parse(rows, ['icons']).map((it) => it.tags[0]), ['icons']);
+});
+
+test('appinspo: reads the data endpoint from the site bundle', () => {
+  assert.deepStrictEqual(findSupabaseConfig(fixture('appinspo-bundle.txt')), {
+    url: 'https://agbxwcsaoimvmnlnelss.supabase.co',
+    key: 'eyJFAKE.test.key',
+  });
+});
+
+test('inspora: posts from the page data, oversized videos swapped for the preview', () => {
+  const items = inspora.parse(fixture('inspora.html'));
+  assert.strictEqual(items.length, 16);
+  for (const it of items) {
+    assert.match(it.pageUrl, /^https:\/\/www\.inspora\.design\/posts\/[a-z0-9-]+$/);
+    assert.ok(it.publishedAt > Date.parse('2026-01-01') && it.title && it.creator.name);
+    for (const m of it.media.filter((x) => x.type === 'video')) assert.ok(shortEdge(m) <= MAX_VIDEO_SHORT_EDGE, m.url);
+  }
+  assert.deepStrictEqual(inspora.listingUrls('https://inspora.design'), [
+    'https://www.inspora.design/?category=Web',
+    'https://www.inspora.design/?category=Product',
+  ]);
+  assert.deepStrictEqual(inspora.listingUrls('https://www.inspora.design/?category=Motion'), ['https://www.inspora.design/?category=Motion']);
+});
+
+test('generic: decodes entities in titles', () => {
+  const items = generic.parse('<title>A &amp; B &#8211; C</title><video src="/a.mp4"></video>', 'https://example.com/');
+  assert.strictEqual(items[0].title, 'A & B – C');
 });
 
 test('generic: picks large images and videos, skips icons and duplicates', () => {

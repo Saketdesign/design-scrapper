@@ -21,8 +21,23 @@ eagle.onPluginCreate(async (plugin) => {
   let confirmInWindow = null;
 
   const emit = () => listeners.forEach((fn) => fn());
+  const mobbin = load('mobbin-mcp.js').createMobbinMcp({
+    dataDir,
+    fetch: window.fetch.bind(window),
+    openExternal: (url) => eagle.shell.openExternal(url),
+    onChange: emit,
+  });
   const libraryPath = () => eagle.library.path;
   const log = (msg) => eagle.log.info(`[design-scrapper] ${msg}`);
+  const openChrome = (url) => new Promise((resolve, reject) => {
+    const execFile = require('child_process').execFile;
+    const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'google-chrome';
+    const args = process.platform === 'darwin' ? ['-a', 'Google Chrome', url] : process.platform === 'win32' ? ['/c', 'start', '', 'chrome', url] : [url];
+    execFile(command, args, (error) => error ? reject(new Error('Could not open Google Chrome. Open Chrome and try again.')) : resolve());
+  });
+  const mobbinWebsite = load('mobbin-website.js').createMobbinWebsite({ dataDir, openChrome, onChange: emit });
+  mobbinWebsite.start().catch((error) => log(error.message));
+  window.addEventListener('beforeunload', () => mobbinWebsite.close());
 
   async function confirmBackfill(plans, days) {
     const posts = plans.reduce((n, p) => n + p.items.length, 0);
@@ -42,7 +57,7 @@ eagle.onPluginCreate(async (plugin) => {
         title,
         rows: plans.filter((p) => p.items.length).map((p) => ({ label: p.label, value: n(p.items.length) })),
         detail: `${n(files)} files, roughly ${size}. They go to Uncategorized. ${note}`,
-        confirmLabel: 'Import',
+        confirmLabel: `Import ${n(posts)} designs`,
       });
     }
     const lines = [
@@ -52,10 +67,10 @@ eagle.onPluginCreate(async (plugin) => {
     ];
     const { response } = await eagle.dialog.showMessageBox({
       type: 'question',
-      title: 'Design Scrapper',
-      message: title,
-      detail: lines.join('\n\n'),
-      buttons: ['Import', 'Cancel'],
+      title: 'design scrapper',
+      message: title.toLowerCase(),
+      detail: lines.join('\n\n').toLowerCase(),
+      buttons: ['import', 'cancel'],
     });
     return response === 0;
   }
@@ -69,6 +84,8 @@ eagle.onPluginCreate(async (plugin) => {
       libraryPath: libraryPath(),
       eagleItem: eagle.item,
       fetch: window.fetch.bind(window),
+      mobbin,
+      mobbinWebsite,
       tmpDir: path.join(eagle.os.tmpdir(), 'design-scrapper'),
       log,
       days,
@@ -129,7 +146,7 @@ eagle.onPluginCreate(async (plugin) => {
     const parts = [imported ? `${imported} new design${imported === 1 ? '' : 's'} from ${from}` : 'No new designs'];
     if (results.some((r) => r.stopped)) parts.push('stopped early');
     if (failed.length) parts.push(`${failed.map((r) => r.label).join(', ')} need${failed.length === 1 ? 's' : ''} attention`);
-    await eagle.notification.show({ title: 'Design Scrapper', body: parts.join(' · '), mute: true, duration: 6000 });
+    await eagle.notification.show({ title: 'design scrapper', body: parts.join(' · ').toLowerCase(), mute: true, duration: 6000 });
   }
 
   function dueSources() {
@@ -149,6 +166,9 @@ eagle.onPluginCreate(async (plugin) => {
     store,
     state,
     adapterFor,
+    mobbin,
+    mobbinWebsite,
+    openMobbinBridgeFolder: () => eagle.shell.openPath(path.join(plugin.path, 'chrome-extension', 'mobbin')),
     libraryPath,
     rangeOptions: RANGE_OPTIONS,
     defaultSources: DEFAULT_SOURCES,

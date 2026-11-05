@@ -1,7 +1,7 @@
-const { fetchText, xStatusId, toTime, cleanTitle } = require('./util');
+const { xStatusId, toTime, cleanTitle, findSupabaseConfig, discoverSupabaseConfig } = require('./util');
 
 const ORIGIN = 'https://bestdesignsonx.com';
-const TABLE = 'bestdesignsonx';
+const TABLE = 'bdox_designs';
 const PAGE_ROWS = 200;
 const MAX_ROWS = 20000;
 
@@ -26,21 +26,14 @@ function isUi(row) {
 
 // The site is a client-only app reading a public Supabase table with the anon key shipped in its
 // bundle. Read the key from the live bundle so a rotation doesn't break the source.
-function findConfig(bundle) {
-  const m = /"(https:\/\/[a-z0-9]+\.supabase\.co)"\s*,\s*"(eyJ[\w-]*\.[\w-]*\.?[\w-]*)"/.exec(bundle);
-  return m ? { url: m[1], key: m[2] } : null;
-}
+const findConfig = findSupabaseConfig;
 
 let cachedConfig = null;
 
 async function discoverConfig(fetch) {
-  const html = await fetchText(fetch, `${ORIGIN}/`);
-  const scripts = [...html.matchAll(/<script[^>]+src="([^"]+\.js)"/g)].map((m) => new URL(m[1], ORIGIN).toString());
-  for (const src of scripts.filter((s) => s.startsWith(ORIGIN))) {
-    const config = findConfig(await fetchText(fetch, src));
-    if (config) return config;
-  }
-  throw new Error('Could not find the bestdesignsonx data endpoint (site changed?)');
+  const config = await discoverSupabaseConfig(fetch, ORIGIN);
+  if (!config) throw new Error('Could not find the bestdesignsonx data endpoint (site changed?)');
+  return config;
 }
 
 function toItem(row) {
@@ -80,7 +73,7 @@ async function query(fetch, config, since, offset) {
   });
   if (since) params.set('published_at', `gte.${new Date(since).toISOString()}`);
   return fetch(`${config.url}/rest/v1/${TABLE}?${params}`, {
-    headers: { apikey: config.key, Authorization: `Bearer ${config.key}` },
+    headers: { apikey: config.key, Authorization: `Bearer ${config.key}`, 'Accept-Profile': 'bdox' },
   });
 }
 

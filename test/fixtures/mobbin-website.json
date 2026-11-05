@@ -1,0 +1,176 @@
+{
+  "screenInfo": {
+    "animationCdnVideoSources": null,
+    "app": {
+      "appLogoUrl": "https://media.test/jomo-logo.webp",
+      "appName": "Jomo",
+      "id": "e0f80b70-9476-4912-b061-0593d0022cba",
+      "platform": "ios"
+    },
+    "appFullpageScreen": null,
+    "fullpageScreenCdnImgSources": null,
+    "id": "08ee6bc1-341a-4013-be8e-f3bea4f8410c",
+    "positionInVersion": 302,
+    "screenCdnImgSources": {
+      "src": "https://media.test/jomo.png",
+      "downloadableSrc": "https://media.test/jomo.png",
+      "srcSet": []
+    },
+    "screenUrl": "https://media.test/jomo.png",
+    "userScreen": null
+  },
+  "catalog": {
+    "appName": "Jomo",
+    "appVersions": [
+      {
+        "appScreens": [
+          {
+            "id": "f58d5b60-aef8-40ee-860c-a22a364b41cb",
+            "screenUrl": "https://media.test/f58d5b60-aef8-40ee-860c-a22a364b41cb.png"
+          },
+          {
+            "id": "d7574635-c21a-4ccf-9cc0-a047fb579432",
+            "screenUrl": "https://media.test/d7574635-c21a-4ccf-9cc0-a047fb579432.png"
+          },
+          {
+            "id": "5c428d45-cb1b-4460-aa33-903f548325f9",
+            "screenUrl": "https://media.test/5c428d45-cb1b-4460-aa33-903f548325f9.png"
+          },
+          {
+            "id": "17a740d1-166f-41c8-a64b-b9bdc4b88bfb",
+            "screenUrl": "https://media.test/17a740d1-166f-41c8-a64b-b9bdc4b88bfb.png"
+          },
+          {
+            "id": "21a3143e-615d-4e4e-a502-41f12a301b14",
+            "screenUrl": "https://media.test/21a3143e-615d-4e4e-a502-41f12a301b14.png"
+          },
+          {
+            "id": "0acbc9b0-cc63-4513-b622-b410839ce762",
+            "screenUrl": "https://media.test/0acbc9b0-cc63-4513-b622-b410839ce762.png"
+          },
+          {
+            "id": "c5ce1edc-25ad-4039-b3bf-fef06ba02081",
+            "screenUrl": "https://media.test/c5ce1edc-25ad-4039-b3bf-fef06ba02081.png"
+          },
+          {
+            "id": "af02912f-4a02-4c21-84f4-54633060b0de",
+            "screenUrl": "https://media.test/af02912f-4a02-4c21-84f4-54633060b0de.png"
+          },
+          {
+            "id": "ef0737e1-42b2-475c-96a6-74645a08fb9b",
+            "screenUrl": "https://media.test/ef0737e1-42b2-475c-96a6-74645a08fb9b.png"
+          },
+          {
+            "id": "2ecc9484-01b4-4f74-a655-7bafea162d1d",
+            "screenUrl": "https://media.test/2ecc9484-01b4-4f74-a655-7bafea162d1d.png"
+          },
+          {
+            "id": "9e863242-deaf-4397-82e5-1cf6fb9c1931",
+            "screenUrl": "https://media.test/9e863242-deaf-4397-82e5-1cf6fb9c1931.png"
+          },
+          {
+            "id": "af3d04eb-0b65-4fac-a743-7a851be5dcdc",
+            "screenUrl": "https://media.test/af3d04eb-0b65-4fac-a743-7a851be5dcdc.png"
+          },
+          {
+            "id": "bac8c60f-af70-43a0-9c23-00e5dd20fccc",
+            "screenUrl": "https://media.test/bac8c60f-af70-43a0-9c23-00e5dd20fccc.png"
+          },
+          {
+            "id": "fa055aff-4e2e-4697-a7fe-a900f5682585",
+            "screenUrl": "https://media.test/fa055aff-4e2e-4697-a7fe-a900f5682585.png"
+          },
+          {
+            "id": "4fdbf9dd-9616-46c2-a3aa-42328c22e755",
+            "screenUrl": "https://media.test/4fdbf9dd-9616-46c2-a3aa-42328c22e755.png"
+          },
+          {
+            "id": "a31ffedf-b710-4d36-a04c-03647e260f82",
+            "screenUrl": "https://media.test/a31ffedf-b710-4d36-a04c-03647e260f82.png"
+          },
+          {
+            "id": "55e368d0-6f66-41f8-a8d6-e2c0da5ec61e",
+            "screenUrl": "https://media.test/55e368d0-6f66-41f8-a8d6-e2c0da5ec61e.png"
+          },
+          {
+            "id": "38442010-28c3-4b55-a8bd-fe5519e02dd4",
+            "screenUrl": "https://media.test/38442010-28c3-4b55-a8bd-fe5519e02dd4.png"
+          },
+          {
+            "id": "5ded1478-2749-4765-8822-607c3c2e765c",
+            "screenUrl": "https://media.test/5ded1478-2749-4765-8822-607c3c2e765c.png"
+          },
+          {
+            "id": "aa6b406e-b555-4e22-9a33-87d64441a92a",
+            "screenUrl": "https://media.test/aa6b406e-b555-4e22-9a33-87d64441a92a.png"
+          },
+          {
+            "id": "560ea397-8294-4491-be7a-942fe5e00057",
+            "screenUrl": "https://media.test/560ea397-8294-4491-be7a-942fe5e00057.png"
+          },
+          {
+            "id": "94b84458-188f-408f-b58e-7c59b6ea05fd",
+            "screenUrl": "https://media.test/94b84458-188f-408f-b58e-7c59b6ea05fd.png"
+          },
+          {
+            "id": "1ac216a8-d561-4b5c-9e79-72daff36e1aa",
+            "screenUrl": "https://media.test/1ac216a8-d561-4b5c-9e79-72daff36e1aa.png"
+          },
+          {
+            "id": "3fee2d77-5d17-4e7a-8eda-9c37a86bfce6",
+            "screenUrl": "https://media.test/3fee2d77-5d17-4e7a-8eda-9c37a86bfce6.png"
+          },
+          {
+            "id": "8bfbddeb-ae02-4949-91f7-18e598c684c0",
+            "screenUrl": "https://media.test/8bfbddeb-ae02-4949-91f7-18e598c684c0.png"
+          },
+          {
+            "id": "3dafec04-1a3c-4b1e-922d-ec0a26d3b3a7",
+            "screenUrl": "https://media.test/3dafec04-1a3c-4b1e-922d-ec0a26d3b3a7.png"
+          },
+          {
+            "id": "e37de470-df19-474a-88c5-60518ed9176d",
+            "screenUrl": "https://media.test/e37de470-df19-474a-88c5-60518ed9176d.png"
+          },
+          {
+            "id": "79b9522e-5676-40d6-a5a2-241bd42f0c0e",
+            "screenUrl": "https://media.test/79b9522e-5676-40d6-a5a2-241bd42f0c0e.png"
+          },
+          {
+            "id": "92a92034-f129-4b0e-b59d-1495c40572a7",
+            "screenUrl": "https://media.test/92a92034-f129-4b0e-b59d-1495c40572a7.png"
+          },
+          {
+            "id": "36514e42-8a65-4b72-a2ca-152d274f14e9",
+            "screenUrl": "https://media.test/36514e42-8a65-4b72-a2ca-152d274f14e9.png"
+          },
+          {
+            "id": "01e400b8-8766-4e12-afd2-4ee62ef52868",
+            "screenUrl": "https://media.test/01e400b8-8766-4e12-afd2-4ee62ef52868.png"
+          },
+          {
+            "id": "7be16b7a-3b9b-4380-9f9f-6de8487b4cc5",
+            "screenUrl": "https://media.test/7be16b7a-3b9b-4380-9f9f-6de8487b4cc5.png"
+          },
+          {
+            "id": "8eb45abf-3d3b-44a8-8f18-04018b6bbed3",
+            "screenUrl": "https://media.test/8eb45abf-3d3b-44a8-8f18-04018b6bbed3.png"
+          },
+          {
+            "id": "355c903b-4580-4f82-bd8f-0c46195fa434",
+            "screenUrl": "https://media.test/355c903b-4580-4f82-bd8f-0c46195fa434.png"
+          },
+          {
+            "id": "aca172c1-9a31-42eb-8504-ed201de331d6",
+            "screenUrl": "https://media.test/aca172c1-9a31-42eb-8504-ed201de331d6.png"
+          }
+        ],
+        "createdAt": "2026-09-13T22:45:18.643996+00:00",
+        "id": "0cff806d-ff69-5b8e-b16e-25f10a1e80d3",
+        "publishedAt": "2026-09-14T09:03:00+00:00"
+      }
+    ],
+    "id": "e0f80b70-9476-4912-b061-0593d0022cba",
+    "platform": "ios"
+  }
+}

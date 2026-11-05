@@ -4,6 +4,9 @@ const fs = require('node:fs');
 const recent = require('../js/adapters/recent');
 const vibrant = require('../js/adapters/vibrant');
 const bdx = require('../js/adapters/bestdesignsonx');
+const sixtyfps = require('../js/adapters/sixtyfps');
+const appinspo = require('../js/adapters/appinspo');
+const inspora = require('../js/adapters/inspora');
 
 const fixture = (name) => fs.readFileSync(`${__dirname}/fixtures/${name}`, 'utf8');
 const DAY = 24 * 3600e3;
@@ -135,4 +138,53 @@ test('bestdesignsonx: pages through all rows in the range', async () => {
   ]);
   const items = await bdx.fetchItems('https://bestdesignsonx.com/', { fetch, since: Date.parse('2026-09-18') });
   assert.strictEqual(items.length, 205);
+});
+
+test('60fps: reads shot pages for dates, skipping known shots and stopping once past the range', async () => {
+  const card = (slug) => `<div><video><source src="https://video.gumlet.io/a/${slug}/main.mp4" type="video/mp4"></video><a href="./shots/${slug}"><p>${slug}</p></a></div>`;
+  const listing = ['s1', 's2', 's3', 's4', 's5', 's6', 's7'].map(card).join('');
+  const dates = { s1: '2026-10-20', s2: '2026-10-19', s3: '2026-10-01', s4: '2026-09-30', s5: '2026-10-18', s6: '2026-09-01', s7: '2026-09-01' };
+  const ld = (slug) => `<script type="application/ld+json">${JSON.stringify({ '@type': 'VideoObject', name: `Shot ${slug}`, contentUrl: `https://video.gumlet.io/a/${slug}/main.mp4`, uploadDate: `${dates[slug]}T00:00:00Z` })}</script>`;
+  const fetch = fakeFetch([
+    ['https://60fps.design/shots/', (url) => ld(url.split('/').pop())],
+    ['https://60fps.design/', listing],
+  ]);
+
+  const items = await sixtyfps.fetchItems('https://60fps.design/', { fetch, since: Date.parse('2026-10-15'), isKnown: (id) => id === 'shots/s2' });
+  const pages = fetch.calls.map((c) => c.url.split('/').pop()).filter((x) => x.startsWith('s'));
+  assert.deepStrictEqual(pages, ['s1', 's3', 's4', 's5', 's6', 's7'], 'skips the known shot; one in-range shot resets the stop count');
+  assert.strictEqual(items.find((it) => it.id === 'shots/s1').title, 'Shot s1');
+  assert.strictEqual(items.find((it) => it.id === 'shots/s5').publishedAt, Date.parse('2026-10-18'));
+
+  fetch.calls.length = 0;
+  await sixtyfps.fetchItems('https://60fps.design/', { fetch, since: Date.parse('2026-10-15') + 30 * DAY });
+  assert.strictEqual(fetch.calls.length, 4, 'listing plus three old shots');
+});
+
+test('inspora: reads the UI categories and reports the bot check plainly', async () => {
+  const fetch = fakeFetch([['https://www.inspora.design/', fixture('inspora.html')]]);
+  const items = await inspora.fetchItems('https://inspora.design/', { fetch });
+  assert.deepStrictEqual(fetch.calls.map((c) => new URL(c.url).searchParams.get('category')), ['Web', 'Product']);
+  assert.strictEqual(items.length, 32);
+
+  const blocked = async () => new Response('<title>Vercel Security Checkpoint</title>', { status: 429 });
+  await assert.rejects(inspora.fetchItems('https://inspora.design/', { fetch: blocked }), /browser check/);
+});
+
+test('appinspo: queries UI categories in the range', async () => {
+  const seen = [];
+  const fetch = fakeFetch([
+    ['https://appinspo.com/assets/index-x.js', fixture('appinspo-bundle.txt')],
+    ['https://appinspo.com/', '<script type="module" crossorigin src="/assets/index-x.js"></script>'],
+    ['https://agbxwcsaoimvmnlnelss.supabase.co/rest/v1/mockups', (url) => {
+      seen.push(new URL(url).searchParams);
+      return JSON.parse(fixture('appinspo.json'));
+    }],
+  ]);
+  const items = await appinspo.fetchItems('https://appinspo.com/', { fetch, since: Date.parse('2026-10-01') });
+  assert.ok(items.length > 0);
+  assert.strictEqual(seen[0].get('category'), 'in.(desktop,mobile,watch,vision)');
+  assert.strictEqual(seen[0].get('created_at'), 'gte.2026-10-01T00:00:00.000Z');
+  const auth = fetch.calls.find((c) => c.url.includes('supabase')).init.headers;
+  assert.strictEqual(auth.apikey, 'eyJFAKE.test.key');
 });

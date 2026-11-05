@@ -75,7 +75,8 @@ async function pool(tasks, size) {
 }
 
 function labelFor(source, adapter) {
-  return adapter.id === 'generic' ? new URL(source.url).hostname.replace(/^www\./, '') : adapter.label;
+  if (adapter.id === 'generic') return new URL(source.url).hostname.replace(/^www\./, '');
+  return adapter.labelFor ? adapter.labelFor(source.url) : adapter.label;
 }
 
 // Step 1: fetch a source and work out which posts are new. Throws if the source fails.
@@ -86,7 +87,10 @@ async function planSource(source, ctx) {
   const status = lib.status[source.id] || {};
   const since = sinceFor(status, now, days);
   const isKnown = (id) => Boolean(lib.seen[`${adapter.id}:${id}`]);
-  const items = await adapter.fetchItems(source.url, { fetch, since, isKnown });
+  const knownIds = adapter.id === 'mobbin' ? Object.entries(lib.seen)
+    .filter(([key]) => key.startsWith('mobbin:')).sort((a, b) => b[1] - a[1]).slice(0, 100).map(([key]) => key.slice('mobbin:'.length)) : [];
+  const dailyState = adapter.id === 'mobbin' ? (lib.mobbinDaily = lib.mobbinDaily || {}) : null;
+  const items = await adapter.fetchItems(source.url, { fetch, since, isKnown, knownIds, mobbin: ctx.mobbin, mobbinWebsite: ctx.mobbinWebsite, dailyState, saveDailyState: () => store.save(), shouldStop: ctx.shouldStop, now });
   if (!items.length && adapter.id !== 'generic' && !adapter.allowsEmptyResults) {
     throw new Error('The site returned no designs. Its layout may have changed.');
   }
@@ -98,7 +102,8 @@ async function planSource(source, ctx) {
     .sort((a, b) => (a.publishedAt || 0) - (b.publishedAt || 0));
   const media = unseen.flatMap((it) => it.media);
   const videos = media.filter((m) => m.type === 'video').length;
-  return { source, adapter, label: labelFor(source, adapter), items: unseen, files: media.length, videos, images: media.length - videos };
+  const metadata = adapter.planMetadata ? adapter.planMetadata({ dailyState, source }) : null;
+  return { source, adapter, label: labelFor(source, adapter), metadata, items: unseen, files: media.length, videos, images: media.length - videos };
 }
 
 function recordFailure(source, err, ctx) {
@@ -126,6 +131,8 @@ async function importPlan(plan, ctx) {
       }
       result.done += 1;
       onProgress(result);
+      // Another source in the same run may already have imported this planned item.
+      if (keysFor(adapter.id, item).some((key) => lib.seen[key])) continue;
       const website = item.postUrl || item.pageUrl;
       if (item.postUrl && (await eagleItem.count({ url: website })) > 0) {
         for (const k of keysFor(adapter.id, item)) lib.seen[k] = now;
@@ -160,6 +167,8 @@ async function importPlan(plan, ctx) {
       // Save as we go so a long backfill that gets interrupted doesn't re-import.
       if (result.posts % 10 === 0) store.save();
     }
+    if (result.failed && adapter.requiresCompleteImport) throw new Error(`${result.failed} files could not be imported. Run again to resume the same app.`);
+    if (!result.stopped && adapter.completeImport) adapter.completeImport(plan, ctx);
     Object.assign(status, result.stopped ? { lastImported: result.imported, lastError: null } : { lastSuccessAt: now, lastImported: result.imported, lastError: null });
   } catch (err) {
     result.error = err.message;

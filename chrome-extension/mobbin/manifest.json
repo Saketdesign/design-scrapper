@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Design Scrapper Mobbin Bridge",
+  "version": "1.0.0",
+  "description": "Connect Eagle Design Scrapper to your existing signed-in Mobbin tab for app screen and animation downloads.",
+  "permissions": ["storage", "scripting", "alarms"],
+  "host_permissions": ["https://mobbin.com/*", "http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{ "matches": ["http://127.0.0.1/*"], "js": ["pair.js"] }],
+  "incognito": "not_allowed",
+  "action": { "default_title": "Design Scrapper Mobbin Bridge" }
+}

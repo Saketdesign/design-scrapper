@@ -65,4 +65,45 @@ function cleanTitle(text, max = 80) {
   return line.length > max ? `${line.slice(0, max - 1).trim()}…` : line;
 }
 
-module.exports = { MAX_VIDEO_SHORT_EDGE, USER_AGENT, fetchText, xStatusId, pickVideo, pickImage, toTime, cleanTitle, oldestOf, mapLimit };
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
+function decodeEntities(text) {
+  return String(text || '').replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+    if (e[0] !== '#') return ENTITIES[e.toLowerCase()] ?? m;
+    const code = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+    return Number.isFinite(code) ? String.fromCodePoint(code) : m;
+  });
+}
+
+// Client-only sites that read a public Supabase table ship its URL and anon key in their bundle,
+// e.g. `createClient("https://x.supabase.co","eyJ…")` or `const a="https://x.supabase.co",b="eyJ…"`.
+function findSupabaseConfig(bundle) {
+  const m = /"(https:\/\/[a-z0-9]+\.supabase\.co)"[^"]{0,40}"(eyJ[\w-]*\.[\w-]*\.?[\w-]*)"/.exec(bundle);
+  return m ? { url: m[1], key: m[2] } : null;
+}
+
+// Fetch a site's own scripts and return the first Supabase config found in them.
+async function discoverSupabaseConfig(fetch, origin) {
+  const html = await fetchText(fetch, `${origin}/`);
+  // SvelteKit loads its entries with import(), then references route nodes and chunks.
+  // Inspect strings only; never execute scripts fetched from a source.
+  const scriptsIn = (text, base) => [...text.matchAll(/["']((?:\.?\.?\/|https:\/\/)[^"'\s]+\.js(?:\?[^"'\s]*)?)["']/g)]
+    .map((m) => new URL(m[1], base).toString()).filter((url) => new URL(url).origin === new URL(origin).origin);
+  const scripts = scriptsIn(html, `${origin}/`);
+  const visited = new Set();
+  for (let i = 0; i < scripts.length && visited.size < 40; i++) {
+    const src = scripts[i];
+    if (visited.has(src)) continue;
+    visited.add(src);
+    const bundle = await fetchText(fetch, src);
+    const config = findSupabaseConfig(bundle);
+    if (config) return config;
+    scripts.push(...scriptsIn(bundle, src));
+  }
+  return null;
+}
+
+module.exports = {
+  MAX_VIDEO_SHORT_EDGE, USER_AGENT, fetchText, xStatusId, pickVideo, pickImage, toTime, cleanTitle, oldestOf, mapLimit,
+  decodeEntities, findSupabaseConfig, discoverSupabaseConfig,
+};

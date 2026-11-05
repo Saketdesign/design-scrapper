@@ -1,7 +1,7 @@
 // Best-effort scraper for sites without a dedicated adapter. Reads static HTML only, so it
 // works on simple pages and finds little on JavaScript-rendered galleries. Pages have no
 // reliable dates, so every media URL not imported before counts as new.
-const { fetchText, xStatusId } = require('./util');
+const { fetchText, xStatusId, decodeEntities } = require('./util');
 
 const MAX_ITEMS = 30;
 const MIN_WIDTH = 400;
@@ -30,12 +30,12 @@ function parse(html, pageUrl) {
       return null;
     }
   };
-  const title = (/<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] || new URL(pageUrl).hostname).trim();
+  const title = decodeEntities(/<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] || new URL(pageUrl).hostname).trim();
   const found = new Map();
   const add = (url, type, alt) => {
     const u = url && !url.startsWith('data:') ? abs(url) : null;
     if (!u || SKIP.test(u) || found.has(u.split('?')[0])) return;
-    found.set(u.split('?')[0], { type, url: u, alt: (alt || '').trim() });
+    found.set(u.split('?')[0], { type, url: u, alt: decodeEntities(alt).trim() });
   };
 
   for (const tag of html.match(/<meta\s[^>]*>/gi) || []) {

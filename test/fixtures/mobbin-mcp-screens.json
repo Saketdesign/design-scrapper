@@ -1,0 +1,21 @@
+{
+  "structuredContent": {
+    "query": "app interface screen",
+    "screens": [
+      {
+        "id": "0a1f625f-3c89-46b4-8b1d-9ac2f6a1b7ee",
+        "image_url": "https://media.test/0a1f625f-3c89-46b4-8b1d-9ac2f6a1b7ee.webp",
+        "mobbin_url": "https://mobbin.com/screens/0a1f625f-3c89-46b4-8b1d-9ac2f6a1b7ee",
+        "app_name": "CapCut",
+        "platform": "ios"
+      },
+      {
+        "id": "08ee6bc1-341a-4013-be8e-f3bea4f8410c",
+        "image_url": "https://media.test/08ee6bc1-341a-4013-be8e-f3bea4f8410c.webp",
+        "mobbin_url": "https://mobbin.com/screens/08ee6bc1-341a-4013-be8e-f3bea4f8410c",
+        "app_name": "Jomo",
+        "platform": "ios"
+      }
+    ]
+  }
+}

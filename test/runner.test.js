@@ -166,3 +166,23 @@ test('schedule: daily runs, hourly retries after failure, bounded lookback', () 
   assert.strictEqual(sinceFor({ lastSuccessAt: NOW - 24 * HOUR }, NOW), NOW - 30 * HOUR);
   assert.strictEqual(sinceFor({ lastSuccessAt: NOW - 60 * 24 * HOUR }, NOW), NOW - 14 * 24 * HOUR);
 });
+
+test('Mobbin MCP receives imported IDs and does not re-plan known screens', async () => {
+  const { store, ctx, dir } = setup({});
+  try {
+    const source = store.addSource('https://mobbin.com/discover/apps/ios/latest');
+    const fixture = JSON.parse(fs.readFileSync(`${__dirname}/fixtures/mobbin-mcp-screens.json`, 'utf8'));
+    const known = fixture.structuredContent.screens[0].id;
+    store.library(ctx.libraryPath).seen[`mobbin:${known}`] = NOW;
+    const calls = [];
+    const plan = await planSource(source, { ...ctx, mobbinWebsite: require('./helpers/mobbin').websiteFor(fixture.structuredContent.screens), mobbin: { callTool: async (name, args) => {
+      calls.push({ name, args });
+      return { structuredContent: { screens: fixture.structuredContent.screens.filter((screen) => screen.id !== known) } };
+    } } });
+    assert.strictEqual(calls[0].name, 'search_screens');
+    assert.deepStrictEqual(calls[0].args.exclude_screen_ids, [known]);
+    assert.strictEqual(plan.items.length, 1);
+    assert.notStrictEqual(plan.items[0].id, known);
+    assert.strictEqual(plan.images, 1);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
