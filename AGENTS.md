@@ -37,6 +37,8 @@ so avoid newer CSS (e.g. `color-mix`) and Node 18+ only APIs inside `js/`.
 - bestdesignsonx.com: public Supabase table read with the anon key found in the site bundle at runtime. Recent posts are untagged, so UI filtering falls back to post text.
 - 60fps.design (`/` shots, `/snippets`): Framer HTML, no dates on listings. Cards are video then `<a href="./shots|snippets/<slug>"><p>Title</p>`; ads and nav links are skipped by that pairing. Unknown shots get their `/shots/<slug>` page read for the JSON-LD `VideoObject` (title, description, uploadDate), stopping after 3 in a row before the range. Only what the listing shows is reachable (~32 shots, 4 snippets); the full archive would mean ~1 MB per shot page.
 - appinspo.com: public Supabase `mockups` table (anon key from the bundle, like bestdesignsonx). UI = categories desktop/mobile/watch/vision; a `/tagged/<category>` source keeps that one.
+- mobbin.com full-app export: items are tagged `App: <name>`; once an app completes, `js/lib/app-folders.js` (via `eagle.smartFolder`, Eagle 4.0 b22+)
+  tags any older imports and creates a `<name>` smart folder (tag rule) inside the root "Apps" group (the one with no conditions). Marked `organized` in `completedApps`.
 - mobbin.com `/discover/apps/ios/animations`: a separate mode from the one-app-per-day export (no MCP). Reads the tab's own feed,
   `POST /api/discover/fetch-discover-page-animations` `{platform:'ios', keysetPagination:{lastPublishedAt,lastCreatedAt,lastAnimationId}}`
   → `{data, pageSize}`, newest first, through the Chrome bridge (signed out it returns `unauthenticated`). Pages back until past `since`.
