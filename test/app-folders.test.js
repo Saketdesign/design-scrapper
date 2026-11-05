@@ -5,7 +5,7 @@ const { organizeApps } = require('../js/lib/app-folders');
 function fakes() {
   const lib = { mobbinDaily: { completedApps: { 'ios:jomo': { name: 'Jomo' } } } };
   const store = { library: () => lib, save() {} };
-  const items = [{ tags: ['Jomo', 'Mobbin'] }, { tags: ['Jomo', 'Mobbin', 'App: Jomo'] }].map((item) => ({ ...item, async save() { this.saved = true; } }));
+  const items = [{ tags: ['Jomo', 'mobbin.com'] }, { tags: ['Jomo', 'mobbin.com', 'App: Jomo'] }].map((item) => ({ ...item, async save() { this.saved = true; } }));
   const eagleItem = { get: async ({ tags }) => items.filter((i) => tags.every((t) => i.tags.includes(t))) };
   const folders = [
     { id: 'old', name: 'Apps', conditions: [{ rules: [{ property: 'tags', value: ['App CRED'] }] }] },
@@ -19,7 +19,7 @@ function fakes() {
 test('files a finished Mobbin app under the Apps group once, tagging older imports', async () => {
   const f = fakes();
   await organizeApps({ ...f, libraryPath: 'lib' });
-  assert.deepEqual(f.items[0].tags, ['Jomo', 'Mobbin', 'App: Jomo']);
+  assert.deepEqual(f.items[0].tags, ['Jomo', 'mobbin.com', 'App: Jomo']);
   assert.ok(!f.items[1].saved);
   assert.equal(f.created.length, 1);
   assert.equal(f.created[0].parent, 'group');

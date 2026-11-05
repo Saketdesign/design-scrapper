@@ -28,7 +28,7 @@ async function organizeApps({ store, libraryPath, eagleItem, smartFolder, log = 
     if (app.organized) continue;
     try {
       const tag = appTag(app.name);
-      for (const item of await eagleItem.get({ tags: [app.name, 'Mobbin'] })) {
+      for (const item of await eagleItem.get({ tags: [app.name, 'mobbin.com'] })) {
         if (item.tags.includes(tag)) continue;
         item.tags = [...item.tags, tag];
         await item.save();
