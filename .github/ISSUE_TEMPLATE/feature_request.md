@@ -1,24 +1,24 @@
 ---
-name: Feature Request / New Source
-about: Suggest a new design gallery or feature
-title: '[SOURCE] '
+name: feature request / new source
+about: suggest a new design gallery or feature
+title: '[source] '
 labels: ['enhancement']
 assignees: ''
 ---
 
-**Requested Source URL**
-Link to the design gallery or inspiration site (e.g. `https://example.com/explore`).
+**requested source URL**
+link to the gallery (e.g. `https://example.com/explore`).
 
-**What type of UI assets does it host?**
-- [ ] Mobile app screenshots (iOS / Android)
-- [ ] Desktop / Web app designs
-- [ ] Video interaction clips / animations
-- [ ] Design systems / component showcases
+**asset types**
+- [ ] mobile screenshots (iOS / Android)
+- [ ] web / desktop designs
+- [ ] video clips / interaction animations
+- [ ] design systems / component libraries
 
-**Does it require login?**
-- [ ] Publicly viewable
-- [ ] Free login required
-- [ ] Subscription required
+**access requirements**
+- [ ] publicly viewable
+- [ ] free account required
+- [ ] subscription required
 
-**Additional Context**
-Any additional context, API endpoints, or notes about the site.
+**context**
+relevant endpoints, page structure notes, or details.

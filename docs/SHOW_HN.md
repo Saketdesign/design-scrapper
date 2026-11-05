@@ -1,24 +1,22 @@
-# Show HN Draft
+# show hn draft
 
-**Title:** Show HN: Design Scrapper – Open-source Eagle plugin to archive UI from Mobbin, 60fps & galleries
+**title:** Show HN: design scrapper – eagle plugin to archive ui from mobbin, 60fps & galleries
 
-**URL:** https://github.com/Saketdesign/design-scrapper
+**url:** https://github.com/Saketdesign/design-scrapper
 
-**Body:**
+**body:**
 
-Hi HN,
+i built design scrapper because i wanted a searchable, offline library of ui inspiration in eagle (eagle.cool) without taking manual screenshots or running into export caps.
 
-I built Design Scrapper because I wanted a local, searchable library of design inspiration in Eagle (eagle.cool) without manually screenshotting apps or getting blocked by export limits.
+it connects to mobbin, 60fps.design, recent.design, vibrant.design, best designs on x, appinspo, and inspora.
 
-Design Scrapper is an open-source Eagle desktop plugin that connects to top design curation platforms—including Mobbin, 60fps.design, Recent.design, Vibrant.design, Best Designs on X, AppInspo, and Inspora.
+details:
+- mobbin integration: searches and selects 1 iOS app daily using mobbin's official MCP server, then uses a local Chrome extension bridge to pull all versions, full-resolution screens, and interaction MP4s from your active session.
+- deduplication: tracks original post IDs and creator handles across aggregators so identical media is saved once.
+- local storage: assets, tags, notes, and links are written directly to your eagle library.
+- zero extra runtime dependencies: runs on eagle's built-in browser and Node runtime.
+- sodium design system: ui built with sodium tokens and light/dark themes.
 
-Key features:
-- **Mobbin Integration**: Uses Mobbin's official MCP server to search and pick 1 iOS app daily, then pairs with an included Chrome extension bridge to pull all versions, full-resolution screenshots, and interaction MP4 videos using your own active browser session.
-- **Cross-Source Deduplication**: Identifies the same creator tweets, original media URLs, or X status IDs across platforms so you never import duplicates.
-- **Local & Offline-First**: Assets are downloaded and tagged directly into your local Eagle library with metadata, tags, and source links.
-- **Zero Runtime Dependencies**: The Eagle plugin executes using standard browser and Node APIs built into Eagle.
-- **Sodium Design System**: The plugin UI is crafted on the Sodium design system (tokens, components, light/dark themes).
+repo: https://github.com/Saketdesign/design-scrapper
 
-GitHub repository: https://github.com/Saketdesign/design-scrapper
-
-I’d love your thoughts, feedback, or suggestions for other design galleries you'd like to see supported!
+feedback and suggestions for other galleries to add are welcome.

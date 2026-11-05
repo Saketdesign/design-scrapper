@@ -1,30 +1,26 @@
 ---
-name: Bug Report
-about: Create a report to help us improve or fix a broken source scraper
-title: '[BUG] '
+name: bug report
+about: report a broken scraper or error in design scrapper
+title: '[bug] '
 labels: ['bug']
 assignees: ''
 ---
 
-**Source or Feature**
-Which source or gallery is failing (e.g. Mobbin, 60fps, Vibrant, Best Designs on X)?
+**source or feature**
+which source or gallery is failing (e.g. mobbin, 60fps, vibrant, best designs on x)?
 
-**Describe the bug**
-A clear and concise description of what happened.
+**describe the bug**
+what happened, including the expected outcome.
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '...'
-3. See error
+**steps to reproduce**
+1. go to '...'
+2. click on '...'
+3. error occurs
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
-
-**Environment:**
+**environment**
  - OS: [e.g. macOS 14.5, Windows 11]
- - Eagle version: [e.g. 4.0 build ...]
- - Plugin version / Commit SHA:
+ - Eagle version: [e.g. 4.0]
+ - plugin version or commit SHA:
 
-**Logs or Screenshots**
-If applicable, paste excerpts from Eagle's developer inspector (`eagle.log` or console).
+**logs or screenshots**
+paste relevant lines from `eagle.log` or the inspector console.

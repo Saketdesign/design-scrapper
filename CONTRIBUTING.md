@@ -1,60 +1,59 @@
-# Contributing to Design Scrapper
+# contributing to design scrapper
 
-Thank you for your interest in contributing! Design Scrapper is an open-source [Eagle](https://eagle.cool) plugin that automatically imports curated UI inspiration screenshots and interaction videos into your Eagle library.
+design scrapper is an open-source [Eagle](https://eagle.cool) plugin that saves curated ui screenshots and interaction videos into your eagle library.
 
-## Quick Start
+## quick start
 
-The plugin runtime runs inside Eagle without external npm dependencies. Node dependencies are for dev tools and tests only.
+the plugin runtime executes inside eagle without external npm dependencies. node dependencies are for development and testing only.
 
 ```bash
-# Clone the repository
+# clone the repository
 git clone https://github.com/Saketdesign/design-scrapper.git
 cd design-scrapper
 
-# Install dev dependencies (ESLint and Sodium linter)
+# install dev dependencies (eslint and sodium linter)
 npm install
 
-# Run the test suite (71 passing tests)
+# run the test suite
 npm test
 
-# Run the Sodium design system linter
+# run the sodium design system linter
 npm run lint
 ```
 
-## Testing Sources without Eagle
+## testing sources without eagle
 
-You can dry-run any scraper directly from your terminal without opening Eagle or saving files:
+dry-run any scraper directly from your terminal without opening eagle or writing files:
 
 ```bash
-# Test all sources for the last 24 hours
+# test all sources for the last 24 hours
 node scripts/dry-run.js 24
 
-# Test a specific URL
+# test a specific source
 node scripts/dry-run.js 24 https://60fps.design/
 node scripts/dry-run.js all https://vibrant.design/
 ```
 
-## Adding a New Source Adapter
+## adding a new source adapter
 
-1. Create a new adapter file in `js/adapters/<name>.js`.
-2. Follow the adapter interface:
+1. create `js/adapters/<name>.js`.
+2. implement the adapter interface:
    - `id`: unique string identifier
    - `label`: display label
    - `matches(url)`: boolean check
-   - `fetchItems(url, { fetch, since, isKnown })`: returns array of items with `{ id, title, pageUrl, postUrl, publishedAt, media, creator, tags }`
-3. Register the adapter in `js/adapters/index.js`.
-4. Add unit and backfill tests in `test/adapters.test.js` and `test/backfill.test.js` using recorded HTML/JSON fixtures in `test/fixtures/`.
-5. Run `npm test` to verify everything passes.
+   - `fetchItems(url, { fetch, since, isKnown })`: returns an array of items with `{ id, title, pageUrl, postUrl, publishedAt, media, creator, tags }`
+3. register the adapter in `js/adapters/index.js`.
+4. add test fixtures to `test/fixtures/` and add test cases in `test/adapters.test.js` or `test/backfill.test.js`.
+5. run `npm test` and `npm run lint` to verify.
 
-## UI Guidelines: Sodium Design System
+## ui: sodium design system
 
-The Sources window UI is built using the [Sodium](https://design.how/systems/sodium) design system.
-- All colors, typography, and spacing must use Sodium design tokens from `css/sodium/tokens.css`.
-- Avoid arbitrary inline colors or ad-hoc margins.
-- Run `npm run lint` before opening a pull request to ensure zero lint findings.
+the sources window uses the [Sodium](https://design.how/systems/sodium) token system.
+- use tokens from `css/sodium/tokens.css`.
+- do not use arbitrary inline colors or ad-hoc margins.
+- run `npm run lint` before opening a pull request.
 
-## Issue Triage & Maintenance SLA
+## issue triage & SLA
 
-We want contributors and users to have a responsive experience:
-- **Triage Commitment**: We actively monitor GitHub Issues and Discussions and commit to acknowledging and triaging new issues within **24 hours**.
-- **Security / Secrets**: If you find any security vulnerability or API key issue, please open an issue or security advisory immediately.
+- triage commitment: issues and discussions are reviewed and triaged within 24 hours.
+- security: report vulnerabilities or leaked credentials directly via github security advisories or by opening an issue.
