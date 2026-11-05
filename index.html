@@ -3,96 +3,116 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <title>Design Scrapper</title>
+    <title>Design scrapper</title>
+    <link rel="stylesheet" href="css/sodium/tokens.css">
+    <link rel="stylesheet" href="css/sodium/base.css">
+    <link rel="stylesheet" href="css/sodium/recipes.css">
+    <link rel="stylesheet" href="css/sodium/components.css">
     <link rel="stylesheet" href="css/app.css">
     <script type="text/javascript" src="js/main.js"></script>
     <script type="text/javascript" src="js/ui.js" defer></script>
 </head>
 
-<body>
-    <div class="app">
-        <header class="header">
-            <div class="brand">
-                <h1 id="title" data-text="Design Scrapper">Design Scrapper</h1>
-                <p class="eyebrow">New UI designs · once a day · into Uncategorized</p>
+<body class="sodium">
+    <div class="page">
+        <header class="page-head">
+            <div class="page-intro">
+                <h1 class="type-title">Design scrapper</h1>
+                <p class="type-body-sm text-text-2">New UI designs from your sources, once a day while Eagle is open. They go to Uncategorized.</p>
             </div>
-            <div class="run-controls">
-                <div id="range" class="segmented" role="radiogroup" aria-label="Which posts to import when you click Run">
-                    <span class="segmented-thumb" aria-hidden="true"></span>
-                </div>
-                <button id="runAll" class="btn primary">Run all now</button>
+            <div class="page-actions">
+                <button id="olderBtn" type="button" data-slot="button" data-variant="secondary" data-size="default" class="edged" aria-haspopup="menu" aria-expanded="false" aria-controls="olderMenu">
+                    <span data-slot="button-text">Import older</span>
+                </button>
+                <button id="runAll" type="button" data-slot="button" data-variant="primary" data-size="default" class="slab">
+                    <span data-slot="button-stack">
+                        <span data-slot="button-idle"><span data-slot="button-text">Run now</span></span>
+                        <span data-slot="button-pending" aria-hidden="true"><span class="pending"></span><span data-slot="button-text">Running</span></span>
+                    </span>
+                </button>
             </div>
         </header>
 
-        <section id="runPanel" class="run-panel" hidden>
-            <div class="run-head">
-                <span class="run-icon"><svg class="spin" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" opacity=".25"/><path d="M8 2a6 6 0 0 1 6 6"/></svg></span>
-                <div class="run-heading">
-                    <div id="runTitle" class="run-title"></div>
-                    <div id="runSub" class="run-sub"></div>
-                </div>
-                <span id="runPct" class="run-pct"></span>
-            </div>
-            <div class="run-bar"><span id="runBar"></span></div>
-            <ul id="runSteps" class="run-steps"></ul>
-            <div class="run-tip">
-                <span id="tipDots" class="tip-dots" aria-hidden="true"></span>
-                <span id="tipText" class="tip-text"></span>
-            </div>
-        </section>
+        <div id="alerts" class="stack" hidden></div>
+        <div id="overview"></div>
 
-        <section>
-            <div class="section-title">
-                <h2>Sources</h2>
-                <span id="sourceCount" class="count"></span>
+        <div data-slot="tabs">
+            <div data-slot="tabs-list" role="tablist" aria-label="Views">
+                <button id="tab-imports" type="button" role="tab" data-slot="tabs-trigger" data-tab="imports" aria-controls="panel-imports">Imports <span id="importsCount" data-slot="tabs-count"></span></button>
+                <button id="tab-sources" type="button" role="tab" data-slot="tabs-trigger" data-tab="sources" aria-controls="panel-sources">Sources <span id="sourcesCount" data-slot="tabs-count"></span></button>
             </div>
-            <ul id="sources" class="card list"></ul>
-            <form id="addForm" class="add">
-                <input id="addUrl" type="text" placeholder="Paste a website link, e.g. https://vibrant.design/" autocomplete="off" spellcheck="false">
-                <button class="btn explore" type="submit">
-                    <span>Add source</span>
-                    <span class="explore-icon"><svg viewBox="0 0 16 16"><path d="M8 3.5v9M3.5 8h9"/></svg></span>
+
+            <div id="panel-imports" role="tabpanel" data-slot="tabs-content" aria-labelledby="tab-imports" tabindex="0">
+                <div id="imports"></div>
+            </div>
+
+            <div id="panel-sources" role="tabpanel" data-slot="tabs-content" aria-labelledby="tab-sources" tabindex="0" hidden>
+                <section data-slot="frame" class="frame" aria-label="Sources">
+                    <div data-slot="frame-body" data-padding="none">
+                        <div id="sources" data-slot="item-group" data-variant="plain" role="list"></div>
+                    </div>
+                    <div data-slot="frame-body" data-padding="default">
+                        <form id="addForm" data-slot="field" novalidate>
+                            <label data-slot="field-label" for="addUrl">Add a source</label>
+                            <div data-slot="form-row">
+                                <div id="addField" data-slot="input" class="field">
+                                    <input id="addUrl" data-slot="input-control" data-control type="text" placeholder="https://" autocomplete="off" spellcheck="false" aria-describedby="addHint addError">
+                                </div>
+                                <button type="submit" data-slot="button" data-variant="secondary" data-size="default" class="edged"><span data-slot="button-text">Add source</span></button>
+                            </div>
+                            <p id="addHint" data-slot="field-description">A link to any design gallery. Sites without built-in support are read on a best-effort basis.</p>
+                            <p id="addError" data-slot="field-error" role="alert" hidden></p>
+                        </form>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <div id="olderMenu" data-slot="dropdown-menu-content" class="overlay overlay-motion" role="menu" aria-labelledby="olderBtn" tabindex="-1" hidden></div>
+    <div id="rowMenu" data-slot="dropdown-menu-content" class="overlay overlay-motion" role="menu" tabindex="-1" hidden></div>
+
+    <div id="toasts" data-slot="toast-viewport" role="region" aria-label="Notifications" aria-live="polite"></div>
+
+    <div id="mobbinLogin" hidden>
+        <div data-slot="dialog-overlay"></div>
+        <div data-slot="dialog-content" class="overlay mobbin-login" role="dialog" aria-modal="true" aria-labelledby="mobbinLoginTitle" aria-describedby="mobbinLoginDescription" tabindex="-1">
+            <header data-slot="dialog-header" class="panel-head">
+                <h2 id="mobbinLoginTitle" data-slot="dialog-title">Connect Mobbin</h2>
+            </header>
+            <div data-slot="dialog-body">
+                <p id="mobbinLoginDescription" data-slot="dialog-description">MCP selects one iOS app daily. The Chrome bridge downloads all its available screens and animation videos using your existing Mobbin login. Keep Chrome open.</p>
+                <p data-slot="field-description">Install the included Mobbin bridge once: open chrome://extensions in Chrome, turn on Developer mode, choose Load unpacked, and select the bridge folder. Then choose Pair Chrome.</p>
+                <button id="mobbinBridgeFolder" type="button" data-slot="button" data-variant="secondary" data-size="sm" class="edged"><span data-slot="button-text">Open bridge folder</span></button>
+                <p id="mobbinLoginStatus" data-slot="field-description" role="status" aria-live="polite">Opening your browser...</p>
+            </div>
+            <footer data-slot="dialog-footer">
+                <button id="mobbinLoginClose" type="button" data-slot="button" data-variant="secondary" data-size="default" class="edged"><span data-slot="button-text">Close connection</span></button>
+                <button id="mobbinChromePair" type="button" data-slot="button" data-variant="secondary" data-size="default" class="edged"><span data-slot="button-text">Pair Chrome</span></button>
+                <button id="mobbinLoginCheck" type="button" data-slot="button" data-variant="primary" data-size="default" class="slab">
+                    <span data-slot="button-stack">
+                        <span data-slot="button-idle"><span data-slot="button-text">Check connection</span></span>
+                        <span data-slot="button-pending" aria-hidden="true"><span class="pending"></span><span data-slot="button-text">Checking</span></span>
+                    </span>
                 </button>
-            </form>
-            <p id="addError" class="error" hidden></p>
-        </section>
-
-        <section>
-            <div class="section-title">
-                <h2>Recent imports</h2>
-                <div id="filter" class="filter" hidden>
-                    <button id="filterBtn" class="filter-btn" type="button" aria-haspopup="true" aria-expanded="false"></button>
-                    <div id="filterMenu" class="menu" hidden></div>
-                </div>
-            </div>
-            <div id="activity" class="card timeline"></div>
-        </section>
-
-        <footer class="eyebrow">Checks every hour while Eagle is open · each source runs once every 24 h</footer>
+            </footer>
+        </div>
     </div>
 
-    <div id="selectionBar" class="selection-bar" hidden>
-        <span id="selCount" class="sel-count"></span>
-        <button class="icon-btn" data-sel="clear" title="Clear selection (Esc)"><svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button>
-        <span class="sel-sep"></span>
-        <button class="btn sm" data-sel="run">Run</button>
-        <button class="btn sm danger" data-sel="remove">Remove</button>
-    </div>
-
-    <div id="toasts" class="toasts" aria-live="polite"></div>
-
-    <div id="modal" class="modal-backdrop" hidden>
-        <div class="modal" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-            <div class="modal-art"><svg viewBox="0 0 16 16"><path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M3 13.5h10"/></svg></div>
-            <div class="modal-body">
-                <h3 id="modalTitle"></h3>
-                <dl id="modalRows" class="modal-rows"></dl>
-                <p id="modalDetail" class="modal-detail"></p>
+    <div id="dialog" hidden>
+        <div data-slot="dialog-overlay"></div>
+        <div data-slot="dialog-content" class="overlay" role="dialog" aria-modal="true" aria-labelledby="dialogTitle" aria-describedby="dialogDetail" tabindex="-1">
+            <header data-slot="dialog-header" class="panel-head">
+                <h2 id="dialogTitle" data-slot="dialog-title"></h2>
+            </header>
+            <div data-slot="dialog-body">
+                <dl id="dialogRows" data-slot="data-list"></dl>
+                <p id="dialogDetail" data-slot="dialog-description"></p>
             </div>
-            <div class="modal-actions">
-                <button id="modalCancel" class="btn">Cancel</button>
-                <button id="modalConfirm" class="btn primary"></button>
-            </div>
+            <footer data-slot="dialog-footer">
+                <button id="dialogCancel" type="button" data-slot="button" data-variant="secondary" data-size="default" class="edged"><span data-slot="button-text">Cancel</span></button>
+                <button id="dialogConfirm" type="button" data-slot="button" data-variant="primary" data-size="default" class="slab"><span data-slot="button-text"></span></button>
+            </footer>
         </div>
     </div>
 </body>
