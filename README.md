@@ -63,3 +63,9 @@ Contributions, bug reports, and new source adapters are warmly welcomed! Please 
 ## License
 
 [MIT](LICENSE) © 2026 Saket Joshi
+
+
+## Community & Support
+
+- **Issue SLA:** Bug reports, questions, and feature requests are reviewed within 24 hours.
+- **Discussions:** Ideas and general feedback are welcome in [GitHub Discussions](https://github.com/Saketdesign/design-scrapper/discussions).
