@@ -1,0 +1,232 @@
+/* Sodium's recipes as plain classes. Ported from the @utility blocks in registry/sodium/styles.css
+   (https://design.how/r/sodium/theme.json) for Eagle's Chromium 107, which has no CSS nesting and no color-mix():
+   nesting is spelled out, and every color-mix() declaration follows a fallback that 107 keeps when it drops the
+   second one. The values are Sodium's; change a token in tokens.css, never a recipe here. */
+
+/* Type roles. The label roles are mono capitals with their tracking; nothing else sets capitals or tracking. */
+.type-title { font: var(--type-title); letter-spacing: var(--tracking-title); }
+.type-heading { font: var(--type-heading); letter-spacing: var(--tracking-heading); }
+.type-heading-sm { font: var(--type-heading-sm); letter-spacing: var(--tracking-heading); }
+.type-body { font: var(--type-body); letter-spacing: var(--tracking-body); }
+.type-body-sm { font: var(--type-body-sm); letter-spacing: var(--tracking-body); }
+.type-caption { font: var(--type-caption); letter-spacing: var(--tracking-body); }
+.type-label-lg { font: var(--type-label-lg); letter-spacing: var(--tracking-label-lg); text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.type-label { font: var(--type-label); letter-spacing: var(--tracking-label); text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.type-label-sm { font: var(--type-label-sm); letter-spacing: var(--tracking-label-sm); text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.type-micro { font: var(--type-micro); letter-spacing: var(--tracking-label-sm); text-transform: uppercase; font-variant-numeric: tabular-nums; }
+.type-code { font: var(--type-code); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.type-code-sm { font: var(--type-code-sm); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.data { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--font-mono); font-size: calc(1em * var(--mono-scale)); letter-spacing: 0; }
+
+.text-text-1 { color: var(--text-1); }
+.text-text-2 { color: var(--text-2); }
+.text-text-3 { color: var(--text-3); }
+.text-fail-text { color: var(--fail-text); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
+.truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.focus-ring-inset { outline: var(--focus-width) solid var(--focus); outline-offset: calc(var(--focus-width) * -1); }
+
+/* Structure by rules. A frame is a region's one outer edge; parts inside it are divided by rules, never boxed again. */
+.frame { position: relative; min-width: 0; background-color: var(--page); border: var(--line-width) solid var(--line); }
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--head);
+  padding-inline: var(--inset);
+  background-color: var(--panel);
+  border-block-end: var(--line-width) solid var(--line);
+  font: var(--type-code);
+  color: var(--text-1);
+}
+.panel-head-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+  margin-inline-end: calc((var(--control-sm) - var(--icon)) / -2);
+}
+.rule-row { border-block-end: var(--line-width) solid var(--line-faint); }
+.rule-row:last-child { border-block-end-width: 0; }
+
+/* --k: the colour of a button's light from below. Registered so it transitions; transparent everywhere else. */
+@property --k { syntax: '<color>'; inherits: true; initial-value: transparent; }
+
+/* slab: the one primary. Lit from below, lighter under the pointer with a 1px halo, unlit when held. */
+.slab {
+  --k: var(--primary-light);
+  color: var(--primary-text);
+  background-color: var(--primary-bg);
+  background-image: radial-gradient(95% 140% at 50% 150%, var(--k), transparent 68%);
+  background-image: radial-gradient(95% 140% at 50% 150%, var(--k), transparent 68%), linear-gradient(color-mix(in srgb, var(--k) 45%, transparent), transparent 40%);
+  border: var(--line-width) solid var(--primary-edge);
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 0 0 var(--line-width) transparent;
+  transition-property: background-color, color, border-color, box-shadow, --k;
+  transition-duration: var(--dur-light), var(--dur-light), var(--dur-light), var(--dur-light), var(--dur-glow);
+  transition-timing-function: var(--ease-soft);
+}
+@media (hover: hover) {
+  .slab:hover:not(:disabled, [data-disabled], [aria-busy="true"]) { --k: var(--primary-light-hover); box-shadow: 0 0 0 var(--line-width) var(--primary-ring); background-color: var(--primary-hover); border-color: var(--primary-edge-hover); }
+}
+.slab:active:not(:disabled, [data-disabled]) { --k: transparent; box-shadow: 0 0 0 var(--line-width) var(--primary-ring); background-color: var(--primary-pressed); border-color: var(--primary-edge); transition-duration: var(--dur-press); transition-timing-function: var(--ease-out); }
+.slab[aria-busy="true"] { --k: transparent; }
+.slab:is(:disabled, [data-disabled], [aria-disabled="true"]):not([aria-busy="true"]) { --k: transparent; box-shadow: none; background-color: var(--well); border-color: var(--line); color: var(--text-disabled); }
+
+/* slab-fail: the destructive primary. */
+.slab-fail {
+  color: var(--fail-text);
+  background-color: var(--fail-tint);
+  border: var(--line-width) solid var(--fail);
+  -webkit-tap-highlight-color: transparent;
+  transition-property: background-color, color, border-color;
+  transition-duration: var(--dur-press);
+  transition-timing-function: var(--ease-out);
+}
+@media (hover: hover) {
+  .slab-fail:hover:not(:disabled, [data-disabled], [aria-busy="true"]) { background-image: linear-gradient(var(--hover), var(--hover)); }
+}
+.slab-fail:active:not(:disabled, [data-disabled]) { background-image: linear-gradient(var(--pressed), var(--pressed)); }
+.slab-fail:is(:disabled, [data-disabled], [aria-disabled="true"]):not([aria-busy="true"]) { background-color: var(--well); border-color: var(--line); color: var(--text-disabled); }
+
+/* edged: the secondary, a body a hair off the page with a 1px rule edge, lit from below more faintly. */
+.edged {
+  --k: var(--secondary-light);
+  color: var(--text-1);
+  background-color: var(--secondary-bg);
+  background-image: radial-gradient(95% 140% at 50% 150%, var(--k), transparent 68%);
+  background-image: radial-gradient(95% 140% at 50% 150%, var(--k), transparent 68%), linear-gradient(color-mix(in srgb, var(--k) 45%, transparent), transparent 40%);
+  border: var(--line-width) solid var(--secondary-edge);
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 0 0 var(--line-width) transparent;
+  transition-property: background-color, color, border-color, box-shadow, --k;
+  transition-duration: var(--dur-light), var(--dur-light), var(--dur-light), var(--dur-light), var(--dur-glow);
+  transition-timing-function: var(--ease-soft);
+}
+@media (hover: hover) {
+  .edged:hover:not(:disabled, [data-disabled], [aria-busy="true"]) { --k: var(--secondary-light-hover); box-shadow: 0 0 0 var(--line-width) var(--secondary-ring); background-color: var(--secondary-hover); border-color: var(--secondary-edge-hover); }
+}
+.edged:is(:active, [data-popup-open]):not(:disabled, [data-disabled]) { --k: transparent; box-shadow: 0 0 0 var(--line-width) var(--secondary-ring); background-color: var(--secondary-pressed); border-color: var(--secondary-edge); transition-duration: var(--dur-press); transition-timing-function: var(--ease-out); }
+.edged[aria-busy="true"] { --k: transparent; }
+.edged:is(:disabled, [data-disabled], [aria-disabled="true"]):not([aria-busy="true"]) { --k: transparent; box-shadow: none; background-color: var(--well); color: var(--text-disabled); }
+
+/* quiet: the ghost. No edge, text-2 that turns text-1 with a wash under the pointer. */
+.quiet {
+  color: var(--text-2);
+  background-color: transparent;
+  border: var(--line-width) solid transparent;
+  -webkit-tap-highlight-color: transparent;
+  transition-property: background-color, color;
+  transition-duration: var(--dur-press);
+  transition-timing-function: var(--ease-out);
+}
+@media (hover: hover) {
+  .quiet:hover:not(:disabled, [data-disabled], [aria-busy="true"]) { background-color: var(--hover); color: var(--text-1); }
+}
+.quiet:is(:active, [data-popup-open]):not(:disabled, [data-disabled]) { background-color: var(--pressed); color: var(--text-1); }
+.quiet:is(:disabled, [data-disabled], [aria-disabled="true"]):not([aria-busy="true"]) { color: var(--text-disabled); }
+
+/* checked: a value chosen inside a small control, sodium yellow lit from below like the slab. */
+.checked {
+  --k: var(--primary-light);
+  background-color: var(--check-bg);
+  background-image: radial-gradient(95% 140% at 50% 150%, var(--k), transparent 68%);
+  background-image: radial-gradient(95% 140% at 50% 150%, var(--k), transparent 68%), linear-gradient(color-mix(in srgb, var(--k) 45%, transparent), transparent 40%);
+  border: var(--line-width) solid var(--check-edge);
+  color: var(--check-mark);
+}
+@media (hover: hover) {
+  .checked:hover:not([data-disabled], [data-readonly]) { --k: var(--primary-light-hover); }
+}
+.checked:active:not([data-disabled], [data-readonly]) { --k: transparent; }
+.checked[data-disabled] { --k: transparent; background-image: none; }
+.light-motion {
+  transition-property: background-color, border-color, color, --k;
+  transition-duration: var(--dur-light), var(--dur-light), var(--dur-light), var(--dur-glow);
+  transition-timing-function: var(--ease-soft);
+}
+
+/* field-surface and field: a field's states in the secondary button's light, and the one-line field on it. */
+.field-surface, .field {
+  background-color: var(--field-bg);
+  border: var(--line-width) solid var(--field-edge);
+  color: var(--text-1);
+  box-shadow: 0 0 0 var(--line-width) transparent;
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: var(--dur-light);
+  transition-timing-function: var(--ease-soft);
+  -webkit-tap-highlight-color: transparent;
+}
+:is(.field-surface, .field)::placeholder, :is(.field-surface, .field) ::placeholder { color: var(--text-3); }
+:is(.field-surface, .field):focus-visible { outline: none; }
+@media (hover: hover) {
+  :is(.field-surface, .field):hover:not(:focus-within, [data-popup-open], :disabled, [data-disabled], [readonly], [aria-invalid="true"], [data-invalid]) { background-color: var(--field-hover); border-color: var(--field-edge-hover); box-shadow: 0 0 0 var(--line-width) var(--field-ring-hover); }
+}
+:is(.field-surface, .field):is(:focus-within, [data-popup-open]) { background-color: var(--field-focus-bg); border-color: var(--field-focus-edge); box-shadow: 0 0 0 var(--line-width) var(--field-ring-focus); }
+:is(.field-surface, .field):is([aria-invalid="true"], [data-invalid]) { border-color: var(--fail); box-shadow: 0 0 0 var(--line-width) var(--field-ring-fail); }
+:is(.field-surface, .field):is([aria-invalid="true"], [data-invalid]):focus-within { background-color: var(--field-focus-bg); box-shadow: inset 0 0 0 var(--line-width) var(--fail), 0 0 0 var(--line-width) var(--field-ring-fail); }
+:is(.field-surface, .field):is(:disabled, [data-disabled]) { background-color: var(--well); border-color: var(--line); color: var(--text-disabled); box-shadow: none; }
+.field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  height: var(--field-h, var(--control));
+  padding-inline: var(--field-px, var(--field-inset));
+  font: var(--type-body-sm);
+  letter-spacing: var(--tracking-body);
+}
+/* A bare control inside a field box (data-control) leaves the ring to the box's edge. */
+.sodium :where([data-control]):focus-visible { outline: none; }
+@media (forced-colors: active) {
+  :is(.field-surface, .field):focus-within { outline: var(--focus-width) solid Highlight; outline-offset: calc(var(--focus-width) * -1); }
+}
+
+/* overlay and menu-row: a menu, popover or dialog surface, and how a list popup's row answers. */
+.overlay { background-color: var(--panel); border: var(--line-width) solid var(--line); color: var(--text-1); }
+.menu-row {
+  transition-property: background-color, box-shadow, color;
+  transition-duration: var(--dur-state);
+  transition-timing-function: var(--ease-soft);
+}
+.menu-row[data-highlighted] { color: var(--text-1); background-color: var(--row-highlight); box-shadow: inset 0 var(--line-width) 0 var(--row-highlight-edge), inset 0 calc(var(--line-width) * -1) 0 var(--row-highlight-edge); }
+.menu-row:first-child[data-highlighted] { box-shadow: inset 0 calc(var(--line-width) * -1) 0 var(--row-highlight-edge); }
+.menu-row:last-child[data-highlighted] { box-shadow: inset 0 var(--line-width) 0 var(--row-highlight-edge); }
+
+.well { background-color: var(--well); }
+
+/* How an overlay comes and goes: in on --dur-overlay, fading as it travels --overlay-shift from its trigger. */
+.overlay-motion {
+  transition-property: opacity, translate;
+  transition-duration: var(--dur-overlay);
+  transition-timing-function: var(--ease-out);
+}
+.overlay-motion[data-starting-style] { opacity: 0; }
+.overlay-motion[data-side="bottom"][data-starting-style] { translate: 0 calc(var(--overlay-shift) * -1); }
+
+/* pending: Sodium's spinner, four square cells with the lit one stepping start to end. The three dim cells are a
+   pseudo-element at a third of currentColor, where Sodium mixes the colour with color-mix(). */
+.pending {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: calc(var(--pending-cell) * 4 + var(--space-0-5) * 3);
+  height: var(--pending-cell);
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: var(--pending-cell) var(--pending-cell);
+  background-repeat: no-repeat;
+  animation: sodium-pending var(--dur-pending) steps(4) infinite;
+}
+.pending::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.32;
+  background-image: repeating-linear-gradient(to right, currentColor 0 var(--pending-cell), transparent var(--pending-cell) calc(var(--pending-cell) + var(--space-0-5)));
+}
+@keyframes sodium-pending { from { background-position: 0 0; } to { background-position: calc((var(--pending-cell) + var(--space-0-5)) * 4) 0; } }
+@media (prefers-reduced-motion: reduce) { .pending { animation: none; } }
