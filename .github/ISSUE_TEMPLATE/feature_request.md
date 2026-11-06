@@ -6,11 +6,11 @@ labels: ['enhancement']
 assignees: ''
 ---
 
-**requested source URL**
+**requested source url**
 link to the gallery (e.g. `https://example.com/explore`).
 
 **asset types**
-- [ ] mobile screenshots (iOS / Android)
+- [ ] mobile screenshots (ios / android)
 - [ ] web / desktop designs
 - [ ] video clips / interaction animations
 - [ ] design systems / component libraries
