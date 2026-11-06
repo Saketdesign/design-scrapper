@@ -15,4 +15,4 @@ function adapterFor(url) {
   return adapters.find((a) => a.matches(url)) || generic;
 }
 
-module.exports = { adapterFor, adapters, generic };
+module.exports = { adapterFor };

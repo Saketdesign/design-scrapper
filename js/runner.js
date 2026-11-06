@@ -192,4 +192,4 @@ async function runSource(source, ctx) {
   return importPlan(plan, ctx);
 }
 
-module.exports = { runSource, planSource, importPlan, recordFailure, labelFor, isDue, sinceFor, extFor, tagsFor, annotationFor };
+module.exports = { runSource, planSource, importPlan, recordFailure, labelFor, isDue, sinceFor };

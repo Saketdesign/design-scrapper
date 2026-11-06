@@ -214,4 +214,4 @@ function readTsr(html) {
   return createReader(extractTsrScripts(html));
 }
 
-module.exports = { readTsr, createReader, extractTsrScripts };
+module.exports = { readTsr, createReader };
