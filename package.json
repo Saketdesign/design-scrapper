@@ -1,7 +1,7 @@
 {
   "name": "design-scrapper",
   "private": true,
-  "description": "Eagle plugin. Runtime needs no packages; these are dev tools only.",
+  "description": "eagle plugin. runtime needs no packages; these are dev tools only.",
   "scripts": {
     "test": "node --test",
     "lint": "eslint -c sodium.eslint.config.mjs . && node scripts/check-sodium.js"

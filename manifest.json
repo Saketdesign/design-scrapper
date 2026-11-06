@@ -3,9 +3,15 @@
     "version": "1.0.0",
     "platform": "all",
     "arch": "all",
-    "name": "Design Scrapper",
+    "name": "design scrapper",
     "logo": "/logo.png",
-    "keywords": ["design", "inspiration", "ui", "scraper", "daily"],
+    "keywords": [
+        "design",
+        "inspiration",
+        "ui",
+        "scraper",
+        "daily"
+    ],
     "devTools": false,
     "main": {
         "serviceMode": true,

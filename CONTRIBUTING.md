@@ -1,6 +1,6 @@
 # contributing to design scrapper
 
-design scrapper is an open-source [Eagle](https://eagle.cool) plugin that saves curated ui screenshots and interaction videos into your eagle library.
+design scrapper is an open-source [eagle](https://eagle.cool) plugin that saves curated ui screenshots and interaction videos into your eagle library.
 
 ## quick start
 
@@ -48,12 +48,12 @@ node scripts/dry-run.js all https://vibrant.design/
 
 ## ui: sodium design system
 
-the sources window uses the [Sodium](https://design.how/systems/sodium) token system.
+the sources window uses the [sodium](https://design.how/systems/sodium) token system.
 - use tokens from `css/sodium/tokens.css`.
 - do not use arbitrary inline colors or ad-hoc margins.
 - run `npm run lint` before opening a pull request.
 
-## issue triage & SLA
+## issue triage & sla
 
 - triage commitment: issues and discussions are reviewed and triaged within 24 hours.
 - security: report vulnerabilities or leaked credentials directly via github security advisories or by opening an issue.

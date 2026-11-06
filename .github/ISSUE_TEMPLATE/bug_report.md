@@ -10,7 +10,7 @@ assignees: ''
 which source or gallery is failing (e.g. mobbin, 60fps, vibrant, best designs on x)?
 
 **describe the bug**
-what happened, including the expected outcome.
+what happened, including what you expected.
 
 **steps to reproduce**
 1. go to '...'
@@ -18,9 +18,9 @@ what happened, including the expected outcome.
 3. error occurs
 
 **environment**
- - OS: [e.g. macOS 14.5, Windows 11]
- - Eagle version: [e.g. 4.0]
- - plugin version or commit SHA:
+ - os: [e.g. macos 14.5, windows 11]
+ - eagle version: [e.g. 4.0]
+ - plugin version or commit sha:
 
 **logs or screenshots**
 paste relevant lines from `eagle.log` or the inspector console.
