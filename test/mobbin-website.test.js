@@ -58,8 +58,8 @@ test('Chrome extension reuses a Mobbin tab with session credentials and rejects 
   const noop = { addListener() {} };
   const context = vm.createContext({
     setTimeout, clearTimeout, AbortController, location: { origin: 'https://mobbin.com' },
-    importScripts() {},
-    fetch: async (url, options) => { calls.push({ url, options }); return { ok: true, json: async () => ({ value: { app: 'Alpha' } }) }; },
+    importScripts: (...files) => files.forEach((file) => vm.runInContext(fs.readFileSync(path.join(__dirname, '../chrome-extension/mobbin', file), 'utf8'), context)),
+    fetch: async (url, options) => { calls.push({ url, options }); return { ok: true, status: 200, text: async () => JSON.stringify({ value: { app: 'Alpha' } }) }; },
     chrome: {
       storage: { local: { get: async () => ({}) } },
       runtime: { onMessage: noop, onStartup: noop, onInstalled: noop },

@@ -6,6 +6,7 @@ so avoid newer CSS (e.g. `color-mix`) and Node 18+ only APIs inside `js/`.
 
 ## Commands
 - Tests: `node --test 'test/*.test.js'` (fixtures in `test/fixtures/`, saved from the live sites)
+- Dead code, duplicates, complexity: `npx fallow` (config in `.fallowrc.json`; generated `lib/sodium/` and fixtures are excluded). Must exit 0.
 - Live check without Eagle: `node scripts/dry-run.js [hours=24 | all] [url ...]` (lists only, downloads nothing; `all` takes a few minutes)
 - Load in Eagle: Plugins → Developer Options → Import local project → this folder. Logs: `eagle.log` (Eagle's log), set `devTools: true` in manifest.json for the inspector.
 
@@ -25,7 +26,8 @@ so avoid newer CSS (e.g. `color-mix`) and Node 18+ only APIs inside `js/`.
 
 ## Layout
 - `js/main.js` Eagle entry: scheduler (hourly check, 24 h per source), run lock, notifications, `window.DS` for the UI.
-- `js/ui.js` Sources window (Sodium markup helpers at the top). `js/store.js` state JSON at `<eagle.app.userDataPath>/design-scrapper/state.json`.
+- `js/ui.js` Sources window (Sodium markup helpers at the top); its view logic (text, counts, keyboard, menu placement) is in `js/lib/ui-model.js`, handed over as `DS.model` and unit tested. Keep DOM functions in `ui.js` small; put decisions in the model.
+- `js/lib/messages.js` confirm-dialog and notification wording, plus the Chrome launch command. `chrome-extension/mobbin/validate.js` request checks for the bridge worker. `js/store.js` state JSON at `<eagle.app.userDataPath>/design-scrapper/state.json`.
 - `js/runner.js` fetch → filter (time window + seen list + X status id + Eagle url check) → download → `eagle.item.addFromPath`.
 - `js/adapters/*` one per site; `generic.js` is the best-effort fallback for any other link.
 - `js/lib/seroval.js` safe reader for TanStack `$tsr` payloads (recent.design, vibrant.design). Never eval site code.

@@ -11,6 +11,19 @@ const ISSUER = 'https://auth.test/auth/v1';
 const metadata = { issuer: ISSUER, authorization_endpoint: `${ISSUER}/authorize`, token_endpoint: `${ISSUER}/token`, registration_endpoint: `${ISSUER}/register` };
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } });
 
+const AUTH_REPLIES = {
+  [RESOURCE_METADATA]: () => json({ authorization_servers: [ISSUER] }),
+  'https://auth.test/.well-known/oauth-authorization-server/auth/v1': () => json(metadata),
+  [metadata.registration_endpoint]: () => json({ client_id: 'new-client' }),
+  [metadata.token_endpoint]: () => json({ access_token: 'new-access', refresh_token: 'new-refresh', token_type: 'Bearer', expires_in: 3600 }),
+};
+
+function mcpResult(method) {
+  if (method === 'initialize') return { protocolVersion: PROTOCOL, capabilities: {} };
+  if (method === 'tools/list') return { tools: [{ name: 'search_screens' }, { name: 'list_collections' }] };
+  return { structuredContent: { screens: [] }, content: [] };
+}
+
 function setup(t, handler, { expired = false, connected = true, openExternal } = {}) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ds-mcp-'));
   const file = path.join(dataDir, 'mobbin-oauth.json');
@@ -23,17 +36,12 @@ function setup(t, handler, { expired = false, connected = true, openExternal } =
       const result = await handler(url, init, calls);
       if (result) return result;
     }
-    if (url === RESOURCE_METADATA) return json({ authorization_servers: [ISSUER] });
-    if (url === 'https://auth.test/.well-known/oauth-authorization-server/auth/v1') return json(metadata);
-    if (url === metadata.registration_endpoint) return json({ client_id: 'new-client' });
-    if (url === metadata.token_endpoint) return json({ access_token: 'new-access', refresh_token: 'new-refresh', token_type: 'Bearer', expires_in: 3600 });
+    const known = AUTH_REPLIES[url];
+    if (known) return known();
     assert.equal(url, MCP_URL);
     const body = JSON.parse(init.body);
     if (body.method === 'notifications/initialized') return new Response(null, { status: 202 });
-    const result = body.method === 'initialize' ? { protocolVersion: PROTOCOL, capabilities: {} }
-      : body.method === 'tools/list' ? { tools: [{ name: 'search_screens' }, { name: 'list_collections' }] }
-      : { structuredContent: { screens: [] }, content: [] };
-    return json({ jsonrpc: '2.0', id: body.id, result }, 200, { 'mcp-session-id': 'test-session' });
+    return json({ jsonrpc: '2.0', id: body.id, result: mcpResult(body.method) }, 200, { 'mcp-session-id': 'test-session' });
   };
   const client = createMobbinMcp({ dataDir, fetch, now: () => NOW, openExternal: openExternal || (async () => {}) });
   t.after(() => fs.rmSync(dataDir, { recursive: true, force: true }));

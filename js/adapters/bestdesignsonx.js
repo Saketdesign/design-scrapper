@@ -1,4 +1,4 @@
-const { xStatusId, toTime, cleanTitle, findSupabaseConfig, discoverSupabaseConfig } = require('./util');
+const { xStatusId, toTime, cleanTitle, findSupabaseConfig, discoverSupabaseConfig, pagedRows } = require('./util');
 
 const ORIGIN = 'https://bestdesignsonx.com';
 const TABLE = 'bdox_designs';
@@ -85,20 +85,11 @@ module.exports = {
   matches: (url) => /(^|\.)bestdesignsonx\.com$/i.test(new URL(url).hostname),
   async fetchItems(_sourceUrl, { fetch, since }) {
     cachedConfig = cachedConfig || (await discoverConfig(fetch));
-    const rows = [];
-    for (let offset = 0; offset < MAX_ROWS; offset += PAGE_ROWS) {
-      let res = await query(fetch, cachedConfig, since, offset);
-      if (res.status === 401 || res.status === 403) {
-        cachedConfig = await discoverConfig(fetch);
-        res = await query(fetch, cachedConfig, since, offset);
-      }
-      if (!res.ok) throw new Error(`bestdesignsonx data endpoint responded ${res.status}`);
-      const page = await res.json();
-      if (!Array.isArray(page)) throw new Error('bestdesignsonx data endpoint returned an invalid response');
-      rows.push(...page);
-      // No `since` = first page only; since 0 (all time) pages through everything.
-      if (page.length < PAGE_ROWS || since == null) break;
-    }
+    const rows = await pagedRows({
+      name: 'bestdesignsonx', since, pageRows: PAGE_ROWS, maxRows: MAX_ROWS,
+      send: (offset) => query(fetch, cachedConfig, since, offset),
+      refresh: async () => { cachedConfig = await discoverConfig(fetch); },
+    });
     return parse(rows);
   },
   parse,

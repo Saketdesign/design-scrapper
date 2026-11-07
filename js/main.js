@@ -10,6 +10,7 @@ eagle.onPluginCreate(async (plugin) => {
   const { planSource, importPlan, recordFailure, labelFor, isDue } = load('runner.js');
   const { DEFAULT_SOURCES, CHECK_EVERY_MS, RANGE_OPTIONS, CONFIRM_FROM_DAYS, AVG_MB_PER_VIDEO, AVG_MB_PER_IMAGE } = load('defaults.js');
   const { adapterFor } = load('adapters/index.js');
+  const { backfillCopy, notifyBody, chromeCommand } = load('lib/messages.js');
   const { organizeApps } = load('lib/app-folders.js');
 
   const dataDir = path.join(eagle.app.userDataPath || eagle.os.homedir(), 'design-scrapper');
@@ -31,56 +32,33 @@ eagle.onPluginCreate(async (plugin) => {
   const libraryPath = () => eagle.library.path;
   const log = (msg) => eagle.log.info(`[design-scrapper] ${msg}`);
   const openChrome = (url) => new Promise((resolve, reject) => {
-    const execFile = require('child_process').execFile;
-    const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'google-chrome';
-    const args = process.platform === 'darwin' ? ['-a', 'Google Chrome', url] : process.platform === 'win32' ? ['/c', 'start', '', 'chrome', url] : [url];
-    execFile(command, args, (error) => error ? reject(new Error('Could not open Google Chrome. Open Chrome and try again.')) : resolve());
+    const { command, args } = chromeCommand(process.platform, url);
+    require('child_process').execFile(command, args, (error) => (error ? reject(new Error('Could not open Google Chrome. Open Chrome and try again.')) : resolve()));
   });
   const mobbinWebsite = load('mobbin-website.js').createMobbinWebsite({ dataDir, openChrome, onChange: emit });
   mobbinWebsite.start().catch((error) => log(error.message));
   window.addEventListener('beforeunload', () => mobbinWebsite.close());
 
   async function confirmBackfill(plans, days) {
-    const posts = plans.reduce((n, p) => n + p.items.length, 0);
-    const files = plans.reduce((n, p) => n + p.files, 0);
-    if (!posts) return true;
-    const sum = (key) => plans.reduce((n, p) => n + p[key], 0);
-    const mb = sum('videos') * AVG_MB_PER_VIDEO + sum('images') * AVG_MB_PER_IMAGE;
-    const size = mb >= 1000 ? `${(mb / 1000).toFixed(1)} GB` : `${Math.round(mb)} MB`;
-    const n = (x) => x.toLocaleString('en-US');
-    const title = `Import ${n(posts)} designs from ${days === 'all' ? 'all time' : `the last ${days} days`}?`;
-    const note =
-      files > 1000
-        ? 'This can take hours and Eagle needs to stay open. Stop keeps everything already imported, and running it again continues where it left off.'
-        : 'You can stop at any time.';
-    if (confirmInWindow) {
-      return confirmInWindow({
-        title,
-        rows: plans.filter((p) => p.items.length).map((p) => ({ label: p.label, value: n(p.items.length) })),
-        detail: `${n(files)} files, roughly ${size}. They go to Uncategorized. ${note}`,
-        confirmLabel: `Import ${n(posts)} designs`,
-      });
-    }
-    const lines = [
-      plans.filter((p) => p.items.length).map((p) => `${p.label}: ${n(p.items.length)}`).join('\n'),
-      `${n(files)} files, roughly ${size} (estimated from the average file sizes so far). They go to Uncategorized.`,
-      note,
-    ];
-    const { response } = await eagle.dialog.showMessageBox({
-      type: 'question',
-      title: 'design scrapper',
-      message: title.toLowerCase(),
-      detail: lines.join('\n\n').toLowerCase(),
-      buttons: ['import', 'cancel'],
-    });
+    const copy = backfillCopy(plans, days, { video: AVG_MB_PER_VIDEO, image: AVG_MB_PER_IMAGE });
+    if (!copy) return true;
+    if (confirmInWindow) return confirmInWindow(copy.window);
+    const { response } = await eagle.dialog.showMessageBox({ ...copy.native, buttons: ['import', 'cancel'] });
     return response === 0;
   }
 
-  async function run(sources, { manual = false, days = null } = {}) {
-    if (state.running || !sources.length) return null;
+  function beginRun(sources) {
     Object.assign(state, { running: true, phase: 'checking', stopRequested: false, progress: null, queue: sources.map((s) => s.id), planned: {}, results: {} });
     emit();
-    const ctx = {
+  }
+
+  function endRun() {
+    Object.assign(state, { running: false, phase: null, current: null, progress: null, queue: [], planned: {}, results: {} });
+    emit();
+  }
+
+  function runContext(days) {
+    return {
       store,
       libraryPath: libraryPath(),
       eagleItem: eagle.item,
@@ -96,44 +74,65 @@ eagle.onPluginCreate(async (plugin) => {
         emit();
       },
     };
-    const results = [];
-    try {
-      const plans = [];
-      for (const source of sources) {
-        state.current = source.id;
-        emit();
-        try {
-          const plan = await planSource(source, ctx);
-          state.planned[source.id] = plan.items.length;
-          plans.push(plan);
-        } catch (err) {
-          recordFailure(source, err, ctx);
-          const result = { sourceId: source.id, label: labelFor(source, adapterFor(source.url)), imported: 0, error: err.message };
-          state.results[source.id] = result;
-          results.push(result);
-        }
-      }
-      const needsConfirm = days === 'all' || days >= CONFIRM_FROM_DAYS;
-      if (needsConfirm) {
-        state.phase = 'confirming';
-        state.current = null;
-        emit();
-        if (!(await confirmBackfill(plans, days))) return results;
-      }
-      state.phase = 'importing';
-      for (const plan of plans) {
-        if (state.stopRequested) break;
-        state.current = plan.source.id;
-        state.progress = null;
-        emit();
-        const result = await importPlan(plan, ctx);
-        state.results[plan.source.id] = result;
+  }
+
+  // Step 1 of a run: read every source and note how many new posts it has.
+  async function planAll(sources, ctx, results) {
+    const plans = [];
+    for (const source of sources) {
+      state.current = source.id;
+      emit();
+      try {
+        const plan = await planSource(source, ctx);
+        state.planned[source.id] = plan.items.length;
+        plans.push(plan);
+      } catch (err) {
+        recordFailure(source, err, ctx);
+        const result = { sourceId: source.id, label: labelFor(source, adapterFor(source.url)), imported: 0, error: err.message };
+        state.results[source.id] = result;
         results.push(result);
       }
-    } finally {
-      Object.assign(state, { running: false, phase: null, current: null, progress: null, queue: [], planned: {}, results: {} });
-      emit();
     }
+    return plans;
+  }
+
+  async function importAll(plans, ctx, results) {
+    state.phase = 'importing';
+    for (const plan of plans) {
+      if (state.stopRequested) break;
+      state.current = plan.source.id;
+      state.progress = null;
+      emit();
+      const result = await importPlan(plan, ctx);
+      state.results[plan.source.id] = result;
+      results.push(result);
+    }
+  }
+
+  // False when the user declined the confirmation, so nothing was imported.
+  async function runPhases(sources, ctx, days, results) {
+    const plans = await planAll(sources, ctx, results);
+    if (days === 'all' || days >= CONFIRM_FROM_DAYS) {
+      state.phase = 'confirming';
+      state.current = null;
+      emit();
+      if (!(await confirmBackfill(plans, days))) return false;
+    }
+    await importAll(plans, ctx, results);
+    return true;
+  }
+
+  async function run(sources, { manual = false, days = null } = {}) {
+    if (state.running || !sources.length) return null;
+    beginRun(sources);
+    const results = [];
+    let completed = false;
+    try {
+      completed = await runPhases(sources, runContext(days), days, results);
+    } finally {
+      endRun();
+    }
+    if (!completed) return results;
     await organize();
     await notify(results, manual);
     runDoneListeners.forEach((fn) => fn(results, { manual }));
@@ -141,14 +140,8 @@ eagle.onPluginCreate(async (plugin) => {
   }
 
   async function notify(results, manual) {
-    const imported = results.reduce((n, r) => n + r.imported, 0);
-    const failed = results.filter((r) => r.error);
-    if (!manual && !imported && !failed.length) return;
-    const from = results.filter((r) => r.imported).map((r) => r.label).join(', ');
-    const parts = [imported ? `${imported} new design${imported === 1 ? '' : 's'} from ${from}` : 'No new designs'];
-    if (results.some((r) => r.stopped)) parts.push('stopped early');
-    if (failed.length) parts.push(`${failed.map((r) => r.label).join(', ')} need${failed.length === 1 ? 's' : ''} attention`);
-    await eagle.notification.show({ title: 'design scrapper', body: parts.join(' · ').toLowerCase(), mute: true, duration: 6000 });
+    const body = notifyBody(results, manual);
+    if (body) await eagle.notification.show({ title: 'design scrapper', body, mute: true, duration: 6000 });
   }
 
   function dueSources() {
@@ -177,6 +170,7 @@ eagle.onPluginCreate(async (plugin) => {
     mobbinWebsite,
     openMobbinBridgeFolder: () => eagle.shell.openPath(path.join(plugin.path, 'chrome-extension', 'mobbin')),
     libraryPath,
+    model: load('lib/ui-model.js'),
     rangeOptions: RANGE_OPTIONS,
     defaultSources: DEFAULT_SOURCES,
     labelFor: (source) => labelFor(source, adapterFor(source.url)),

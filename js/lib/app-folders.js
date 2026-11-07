@@ -42,4 +42,4 @@ async function organizeApps({ store, libraryPath, eagleItem, smartFolder, log = 
   }
 }
 
-module.exports = { appTag, ensureAppFolder, organizeApps };
+module.exports = { appTag, organizeApps };

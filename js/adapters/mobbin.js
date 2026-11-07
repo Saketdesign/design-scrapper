@@ -25,19 +25,19 @@ function searchOptions(sourceUrl) {
   return { query };
 }
 
+const screensIn = (data) => (data && Array.isArray(data.screens) ? data.screens : null);
+const jsonOrNull = (text) => {
+  try { return JSON.parse(text); } catch { return null; } // Descriptive text and inline previews are not JSON.
+};
+
 function screensOf(result) {
-  let data = result.structuredContent;
-  if (!data || !Array.isArray(data.screens)) {
-    for (const block of result.content || []) {
-      if (block.type !== 'text') continue;
-      try {
-        const candidate = JSON.parse(block.text);
-        if (candidate && Array.isArray(candidate.screens)) { data = candidate; break; }
-      } catch { /* Ignore descriptive text and inline previews. */ }
-    }
+  const direct = screensIn(result.structuredContent);
+  if (direct) return direct;
+  for (const block of result.content || []) {
+    const screens = block.type === 'text' ? screensIn(jsonOrNull(block.text)) : null;
+    if (screens) return screens;
   }
-  if (!data || !Array.isArray(data.screens)) throw new Error('Mobbin MCP returned an unexpected screen-search result.');
-  return data.screens;
+  throw new Error('Mobbin MCP returned an unexpected screen-search result.');
 }
 
 function parse(result, query) {
@@ -60,18 +60,36 @@ const isAnimations = (sourceUrl) => new URL(sourceUrl).pathname.replace(/\/$/, '
 const ANIMATIONS = '/api/discover/fetch-discover-page-animations';
 const slugOf = (name) => String(name || '').normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 120) || 'app';
 
+const videoUrlOf = (record) => record.animationCdnVideoSources && record.animationCdnVideoSources.source && record.animationCdnVideoSources.source.url;
+const timeOf = (record) => Date.parse(record.publishedAt || record.createdAt);
+
+function appPageOf(record, app) {
+  if (!UUID.test(record.appId || '') || !UUID.test(record.appVersionId || '')) return 'https://mobbin.com/discover/apps/ios/animations';
+  return `https://mobbin.com/apps/${slugOf(app)}-ios-${record.appId}/${record.appVersionId}/screens`;
+}
+
 function animationItem(record) {
-  const video = record.animationCdnVideoSources && record.animationCdnVideoSources.source && record.animationCdnVideoSources.source.url;
+  const video = videoUrlOf(record);
   if (!UUID.test(record.id || '') || !/^https:\/\//i.test(video || '')) return null;
   const app = String(record.appName || '').trim() || 'Mobbin';
-  const appPage = UUID.test(record.appId || '') && UUID.test(record.appVersionId || '')
-    ? `https://mobbin.com/apps/${slugOf(app)}-ios-${record.appId}/${record.appVersionId}/screens` : 'https://mobbin.com/discover/apps/ios/animations';
   return {
     id: `${record.id}:animation`, xStatusId: null, title: cleanTitle(`${app} - Animation ${record.id.slice(0, 8)}`),
-    description: 'Mobbin iOS animations feed.', creator: { name: app, handle: '' }, postUrl: null, pageUrl: appPage,
-    publishedAt: Date.parse(record.publishedAt || record.createdAt) || null,
+    description: 'Mobbin iOS animations feed.', creator: { name: app, handle: '' }, postUrl: null, pageUrl: appPageOf(record, app),
+    publishedAt: timeOf(record) || null,
     tags: ['ios', app, 'Mobbin', 'Animation'], media: [{ type: 'video', url: video }],
   };
+}
+
+async function animationsPage(website, keysetPagination) {
+  const page = await website.request(ANIMATIONS, { platform: 'ios', ...(keysetPagination ? { keysetPagination } : {}) });
+  if (!page || !Array.isArray(page.data)) throw new Error('Mobbin returned an unexpected animations feed.');
+  return page;
+}
+
+// True when `last` ends the feed: a short page, no date range to page through, or records older than it.
+function feedEnds(page, last, since) {
+  const older = Boolean(last) && Boolean(since) && (timeOf(last) || 0) < since;
+  return !last || page.data.length !== page.pageSize || since == null || older;
 }
 
 // The animations tab's own feed, newest first, read in the signed-in Chrome tab.
@@ -81,60 +99,65 @@ async function fetchAnimations(website, { since, shouldStop = () => false }) {
   let keysetPagination;
   for (;;) {
     if (shouldStop()) throw new Error('Stopped while reading the Mobbin animations feed.');
-    const page = await website.request(ANIMATIONS, { platform: 'ios', ...(keysetPagination ? { keysetPagination } : {}) });
-    if (!page || !Array.isArray(page.data)) throw new Error('Mobbin returned an unexpected animations feed.');
+    const page = await animationsPage(website, keysetPagination);
     items.push(...page.data.map(animationItem).filter(Boolean));
     const last = page.data[page.data.length - 1];
-    const older = last && since && (Date.parse(last.publishedAt || last.createdAt) || 0) < since;
-    if (!last || page.data.length !== page.pageSize || since == null || older) return items;
+    if (feedEnds(page, last, since)) return items;
     keysetPagination = { lastPublishedAt: last.publishedAt, lastCreatedAt: last.createdAt, lastAnimationId: last.id };
   }
 }
 
-async function fetchItems(sourceUrl, { mobbin, mobbinWebsite, since, knownIds = [], isKnown = () => false, dailyState = {}, saveDailyState = () => {}, shouldStop, now = Date.now() }) {
+const STALE_KEYS = ['completedAt', 'completedDay', 'inventoryComplete', 'inspectedIds', 'inspectedVersionIds', 'assetIds', 'videoScreenIds'];
+
+// Upgrade a previous 30-screen import by finishing that same app first.
+function upgradeDailyState(current, saveDailyState) {
+  if (!current || current.exportVersion === 3) return;
+  current.seedScreenId = current.seedScreenId || (current.screenIds && current.screenIds[0]);
+  for (const key of STALE_KEYS) delete current[key];
+  current.exportVersion = 3;
+  saveDailyState();
+}
+
+// Pick the next app that has not been exported yet, or null when MCP offers none.
+async function selectApp({ mobbin, options, knownIds, dailyState, now, saveDailyState }) {
+  const exclude = [...new Set(knownIds)].filter((id) => UUID.test(id)).slice(0, 100);
+  const candidates = screensOf(await mobbin.callTool('search_screens', {
+    platform: 'ios', query: options.query, limit: 30, mode: 'standard', image_format: 'webp', exclude_screen_ids: exclude, ...INTENT,
+  }));
+  const candidate = candidates.find((screen) => screen.platform === 'ios' && String(screen.app_name || '').trim()
+    && UUID.test(screen.id || '') && !dailyState.completedApps[appKey(screen.app_name)]);
+  if (!candidate) return null;
+  const current = { key: appKey(candidate.app_name), name: candidate.app_name.trim(), seedScreenId: candidate.id, selectedAt: now, selectedDay: dayOf(now), exportVersion: 3 };
+  dailyState.current = current;
+  saveDailyState();
+  return current;
+}
+
+async function ensureSeed(mobbin, current, saveDailyState) {
+  if (UUID.test(current.seedScreenId || '')) return;
+  const results = screensOf(await mobbin.callTool('search_screens', { platform: 'ios', query: `${current.name} app screen`, limit: 30, mode: 'standard', image_format: 'webp', ...INTENT }));
+  const seed = results.find((screen) => screen.platform === 'ios' && appKey(screen.app_name) === current.key && UUID.test(screen.id || ''));
+  if (!seed) throw new Error('MCP could not find a screen from the selected app. Run again to retry the same app.');
+  current.seedScreenId = seed.id;
+  saveDailyState();
+}
+
+async function fetchItems(sourceUrl, opts) {
+  const { mobbin, mobbinWebsite, since, isKnown = () => false, dailyState = {}, saveDailyState = () => {}, shouldStop, now = Date.now() } = opts;
   if (isAnimations(sourceUrl)) return fetchAnimations(mobbinWebsite, { since, shouldStop });
   const options = searchOptions(sourceUrl);
   if (!mobbin) throw new Error('Connect Mobbin MCP in Eagle from this source’s actions menu.');
-  const day = dayOf(now);
   dailyState.completedApps = dailyState.completedApps || {};
+  upgradeDailyState(dailyState.current, saveDailyState);
   let current = dailyState.current;
-  // Upgrade a previous 30-screen import by finishing that same app first.
-  if (current && current.exportVersion !== 3) {
-    current.seedScreenId = current.seedScreenId || current.screenIds && current.screenIds[0];
-    delete current.completedAt;
-    delete current.completedDay;
-    current.exportVersion = 3;
-    delete current.inventoryComplete;
-    delete current.inspectedIds;
-    delete current.inspectedVersionIds;
-    delete current.assetIds;
-    delete current.videoScreenIds;
-    saveDailyState();
-  }
   // A manual run, another source, or a date-range import cannot select a second app today.
-  if (current && current.completedDay === day) return [];
-  const exclude = [...new Set(knownIds)].filter((id) => UUID.test(id)).slice(0, 100);
-
+  if (current && current.completedDay === dayOf(now)) return [];
   // Keep an incomplete selection even across days so a failed/stopped import resumes it.
   if (!current || current.completedAt) {
-    const candidates = screensOf(await mobbin.callTool('search_screens', {
-      platform: 'ios', query: options.query, limit: 30, mode: 'standard', image_format: 'webp', exclude_screen_ids: exclude, ...INTENT,
-    }));
-    const candidate = candidates.find((screen) => screen.platform === 'ios' && String(screen.app_name || '').trim()
-      && UUID.test(screen.id || '') && !dailyState.completedApps[appKey(screen.app_name)]);
-    if (!candidate) return [];
-    current = { key: appKey(candidate.app_name), name: candidate.app_name.trim(), seedScreenId: candidate.id, selectedAt: now, selectedDay: day, exportVersion: 3 };
-    dailyState.current = current;
-    saveDailyState();
+    current = await selectApp({ mobbin, options, knownIds: opts.knownIds || [], dailyState, now, saveDailyState });
+    if (!current) return [];
   }
-
-  if (!UUID.test(current.seedScreenId || '')) {
-    const results = screensOf(await mobbin.callTool('search_screens', { platform: 'ios', query: `${current.name} app screen`, limit: 30, mode: 'standard', image_format: 'webp', ...INTENT }));
-    const seed = results.find((screen) => screen.platform === 'ios' && appKey(screen.app_name) === current.key && UUID.test(screen.id || ''));
-    if (!seed) throw new Error('MCP could not find a screen from the selected app. Run again to retry the same app.');
-    current.seedScreenId = seed.id;
-    saveDailyState();
-  }
+  await ensureSeed(mobbin, current, saveDailyState);
   return exportApp(mobbinWebsite, current, { isKnown, save: saveDailyState, shouldStop });
 }
 
