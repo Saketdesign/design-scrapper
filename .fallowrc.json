@@ -12,5 +12,11 @@
     { "file": "js/runner.js", "exports": ["recordFailure", "labelFor"] },
     { "file": "lib/sodium/lint/value-rules.mjs", "exports": ["LINT_IGNORES"] },
     { "file": "js/adapters/*.js", "exports": ["*"] }
-  ]
+  ],
+  "duplicates": {
+    "ignore": ["css/sodium/**", "lib/sodium/**"]
+  },
+  "health": {
+    "ignore": ["lib/sodium/**", "sodium.eslint.config.mjs"]
+  }
 }

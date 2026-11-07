@@ -12,6 +12,23 @@ const ENDPOINTS = new Set([
   '/api/discover/fetch-discover-page-animations',
 ]);
 
+const BRIDGE_ERRORS = new Map([
+  ['unauthenticated', 'Mobbin is signed out in Chrome. Sign in to Mobbin in your normal Chrome profile, then run again.'],
+  ['concurrent deny', 'Mobbin is in use in another session. Close that session and retry the same app.'],
+]);
+
+const reasonOf = (result) => (result && result.failure) || 'Chrome returned an unexpected Mobbin response.';
+const messageFor = (error) => BRIDGE_ERRORS.get(error.message) || 'Mobbin could not provide the app export. Check your subscription in Chrome and retry the same app.';
+
+// The value inside a bridge reply, or an error that says what to do about it.
+function unwrap(result) {
+  if (!result || result.failure) throw new Error(reasonOf(result));
+  const data = result.data;
+  if (data && data.error) throw new Error(messageFor(data.error));
+  if (!data || !Object.prototype.hasOwnProperty.call(data, 'value')) throw new Error('Mobbin website returned an unexpected response. The selected app has been kept for retry.');
+  return data.value;
+}
+
 function createMobbinWebsite({ dataDir, openChrome, onChange = () => {}, now = Date.now, requestTimeout = 90000, pollTimeout = 20000 }) {
   const configPath = path.join(dataDir, 'mobbin-chrome.json');
   let config;
@@ -36,51 +53,72 @@ function createMobbinWebsite({ dataDir, openChrome, onChange = () => {}, now = D
     const job = queue.shift();
     respond(response, 200, { id: job.id, endpoint: job.endpoint, body: job.body });
   }
-  async function handle(request, response) {
+  // The Chrome extension is the only page allowed to call this server.
+  function allowOrigin(request, response) {
     const origin = request.headers.origin;
-    if (origin && !/^chrome-extension:\/\/[a-p]{32}$/.test(origin)) return respond(response, 403, {});
+    if (origin && !/^chrome-extension:\/\/[a-p]{32}$/.test(origin)) return false;
     if (origin) response.setHeader('Access-Control-Allow-Origin', origin);
     response.setHeader('Vary', 'Origin');
-    if (request.method === 'OPTIONS') {
-      response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
-      response.setHeader('Access-Control-Allow-Private-Network', 'true');
-      return respond(response, 200, {});
-    }
-    if (request.url === '/connect' && request.method === 'GET') {
-      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" });
-      return response.end('<!doctype html><meta charset="utf-8"><title>Connect Design Scrapper</title><h1>Connect Design Scrapper</h1><p id="bridge-status">The Design Scrapper Mobbin Chrome bridge must be installed. Once connected, return to Eagle and choose Check connection.</p>');
-    }
+    return true;
+  }
+  function preflight(response) {
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    response.setHeader('Access-Control-Allow-Private-Network', 'true');
+    respond(response, 200, {});
+  }
+  function connectPage(response) {
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" });
+    response.end('<!doctype html><meta charset="utf-8"><title>Connect Design Scrapper</title><h1>Connect Design Scrapper</h1><p id="bridge-status">The Design Scrapper Mobbin Chrome bridge must be installed. Once connected, return to Eagle and choose Check connection.</p>');
+  }
+  function authorized(request) {
     const expected = `Bearer ${config.token}`;
     const supplied = request.headers.authorization || '';
-    if (supplied.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected))) return respond(response, 401, {});
-    if (request.url === '/v1/status' && request.method === 'GET') return respond(response, 200, { name: 'design-scrapper-mobbin', version: 1 });
-    if (request.url === '/v1/poll' && request.method === 'GET') {
-      if (waiter) { clearTimeout(waiter.pollTimer); respond(waiter, 200, null); }
-      lastPoll = now();
-      onChange();
-      waiter = response;
-      response.pollTimer = setTimeout(() => { if (waiter === response) waiter = null; respond(response, 200, null); }, pollTimeout);
-      response.on('close', () => { clearTimeout(response.pollTimer); if (waiter === response) waiter = null; });
-      dispatch();
-      return;
+    return supplied.length === expected.length && crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+  }
+  function poll(request, response) {
+    if (waiter) { clearTimeout(waiter.pollTimer); respond(waiter, 200, null); }
+    lastPoll = now();
+    onChange();
+    waiter = response;
+    response.pollTimer = setTimeout(() => { if (waiter === response) waiter = null; respond(response, 200, null); }, pollTimeout);
+    response.on('close', () => { clearTimeout(response.pollTimer); if (waiter === response) waiter = null; });
+    dispatch();
+  }
+  // The request body as text, or null when it is larger than a result may be.
+  async function readBody(request) {
+    let body = '';
+    for await (const chunk of request) {
+      body += chunk;
+      if (body.length > 32 * 1024 * 1024) return null;
     }
-    if (request.url === '/v1/result' && request.method === 'POST') {
-      let body = '';
-      for await (const chunk of request) {
-        body += chunk;
-        if (body.length > 32 * 1024 * 1024) return respond(response, 413, {});
-      }
-      let result;
-      try { result = JSON.parse(body); } catch { return respond(response, 400, {}); }
-      const job = jobs.get(result.id);
-      if (!job) return respond(response, 410, {});
-      jobs.delete(job.id);
-      clearTimeout(job.timer);
-      job.resolve(result.result);
-      return respond(response, 200, {});
-    }
-    respond(response, 404, {});
+    return body;
+  }
+  async function postResult(request, response) {
+    const body = await readBody(request);
+    if (body === null) return respond(response, 413, {});
+    let result;
+    try { result = JSON.parse(body); } catch { return respond(response, 400, {}); }
+    const job = jobs.get(result.id);
+    if (!job) return respond(response, 410, {});
+    jobs.delete(job.id);
+    clearTimeout(job.timer);
+    job.resolve(result.result);
+    respond(response, 200, {});
+  }
+  const routes = new Map([
+    ['GET /v1/status', (request, response) => respond(response, 200, { name: 'design-scrapper-mobbin', version: 1 })],
+    ['GET /v1/poll', poll],
+    ['POST /v1/result', postResult],
+  ]);
+  async function handle(request, response) {
+    if (!allowOrigin(request, response)) return respond(response, 403, {});
+    if (request.method === 'OPTIONS') return preflight(response);
+    const key = `${request.method} ${request.url}`;
+    if (key === 'GET /connect') return connectPage(response);
+    if (!authorized(request)) return respond(response, 401, {});
+    const route = routes.get(key);
+    return route ? route(request, response) : respond(response, 404, {});
   }
 
   function start() {
@@ -119,15 +157,7 @@ function createMobbinWebsite({ dataDir, openChrome, onChange = () => {}, now = D
       queue.push(job);
       dispatch();
     });
-    if (!result || result.failure) throw new Error(result && result.failure || 'Chrome returned an unexpected Mobbin response.');
-    const data = result.data;
-    if (data && data.error) {
-      if (data.error.message === 'unauthenticated') throw new Error('Mobbin is signed out in Chrome. Sign in to Mobbin in your normal Chrome profile, then run again.');
-      if (data.error.message === 'concurrent deny') throw new Error('Mobbin is in use in another session. Close that session and retry the same app.');
-      throw new Error('Mobbin could not provide the app export. Check your subscription in Chrome and retry the same app.');
-    }
-    if (!data || !Object.prototype.hasOwnProperty.call(data, 'value')) throw new Error('Mobbin website returned an unexpected response. The selected app has been kept for retry.');
-    return data.value;
+    return unwrap(result);
   }
 
   return {

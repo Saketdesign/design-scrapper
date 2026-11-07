@@ -13,6 +13,12 @@ const LITERALS = [
   ['NaN', NaN],
 ];
 
+const QUOTES = '"\'`';
+const OPENERS = '([{';
+const CLOSERS = ')]}';
+const NUMBER_START = /[-.\d]/;
+const NUMBER = /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/i;
+
 function extractTsrScripts(html) {
   const out = [];
   const re = /<script\b[^>]*class=["']\$tsr["'][^>]*>([\s\S]*?)<\/script>/g;
@@ -63,31 +69,32 @@ function createReader(text) {
     return pos;
   }
 
+  function parseRef(pos) {
+    const close = text.indexOf(']', pos);
+    const n = Number(text.slice(pos + 3, close));
+    if (text[close + 1] !== '=' || text[close + 2] === '=') return { value: get(n), end: close + 1 };
+    if (registry.has(n)) return { value: registry.get(n), end: skipValue(close + 2) };
+    return parseAssigned(n, close + 2);
+  }
+
+  // A number or one of the literals (!0, null, void 0, ...); anything else is skipped.
+  function parseScalar(pos) {
+    const num = NUMBER_START.test(text[pos]) && NUMBER.exec(text.slice(pos, pos + 40));
+    if (num) return { value: Number(num[0]), end: pos + num[0].length };
+    for (const [lit, value] of LITERALS) {
+      if (text.startsWith(lit, pos) && !/[\w$]/.test(text[pos + lit.length] || '')) return { value, end: pos + lit.length };
+    }
+    return { value: undefined, end: skipValue(pos) };
+  }
+
   function parseValue(pos) {
     pos = ws(pos);
     const ch = text[pos];
-    if (ch === '$' && text.startsWith('$R[', pos)) {
-      const close = text.indexOf(']', pos);
-      const n = Number(text.slice(pos + 3, close));
-      if (text[close + 1] === '=' && text[close + 2] !== '=') {
-        if (registry.has(n)) return { value: registry.get(n), end: skipValue(close + 2) };
-        return parseAssigned(n, close + 2);
-      }
-      return { value: get(n), end: close + 1 };
-    }
+    if (ch === '$' && text.startsWith('$R[', pos)) return parseRef(pos);
     if (ch === '{') return parseObject(pos, {});
     if (ch === '[') return parseArray(pos, []);
     if (ch === '"' || ch === "'") return parseString(pos);
-    if (ch === '-' || (ch >= '0' && ch <= '9') || ch === '.') {
-      const num = /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/i.exec(text.slice(pos, pos + 40));
-      if (num) return { value: Number(num[0]), end: pos + num[0].length };
-    }
-    for (const [lit, value] of LITERALS) {
-      if (text.startsWith(lit, pos) && !/[\w$]/.test(text[pos + lit.length] || '')) {
-        return { value, end: pos + lit.length };
-      }
-    }
-    return { value: undefined, end: skipValue(pos) };
+    return parseScalar(pos);
   }
 
   function parseObject(pos, obj) {
@@ -172,12 +179,12 @@ function createReader(text) {
     let i = pos;
     while (i < text.length) {
       const c = text[i];
-      if (c === '"' || c === "'" || c === '`') {
+      if (QUOTES.includes(c)) {
         i = skipQuoted(i);
         continue;
       }
-      if (c === '(' || c === '[' || c === '{') depth++;
-      else if (c === ')' || c === ']' || c === '}') {
+      if (OPENERS.includes(c)) depth++;
+      else if (CLOSERS.includes(c)) {
         if (depth === 0) return i;
         depth--;
       } else if (c === ',' && depth === 0) return i;

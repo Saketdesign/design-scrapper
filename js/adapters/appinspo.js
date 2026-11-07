@@ -1,4 +1,4 @@
-const { toTime, discoverSupabaseConfig } = require('./util');
+const { toTime, discoverSupabaseConfig, pagedRows } = require('./util');
 
 const ORIGIN = 'https://appinspo.com';
 const TABLE = 'mockups';
@@ -19,21 +19,28 @@ function handleOf(link) {
   return m ? m[1] : '';
 }
 
-function toItem(row) {
+function mediaOf(row) {
   // Video posts also put the video in image_url.
   const videoUrl = row.video_url || (VIDEO_EXT.test(row.image_url || '') ? row.image_url : null);
   const url = videoUrl || row.image_url;
+  return url ? [{ type: videoUrl ? 'video' : 'image', url }] : [];
+}
+
+const titleOf = (row) => row.title || row.alt || `Design by ${row.author || 'unknown'}`;
+const pageUrlOf = (row) => (row.category ? `${ORIGIN}/tagged/${row.category}` : ORIGIN);
+
+function toItem(row) {
   return {
     id: String(row.id),
     xStatusId: null,
-    title: row.title || row.alt || `Design by ${row.author || 'unknown'}`,
+    title: titleOf(row),
     description: row.alt && row.alt !== row.title ? row.alt : '',
     creator: { name: row.author || '', handle: handleOf(row.author_link) },
     postUrl: null,
-    pageUrl: row.category ? `${ORIGIN}/tagged/${row.category}` : ORIGIN,
+    pageUrl: pageUrlOf(row),
     publishedAt: toTime(row.created_at),
     tags: [row.category].filter(Boolean),
-    media: url ? [{ type: videoUrl ? 'video' : 'image', url }] : [],
+    media: mediaOf(row),
   };
 }
 
@@ -74,20 +81,11 @@ module.exports = {
   async fetchItems(sourceUrl, { fetch, since }) {
     const categories = categoriesFor(sourceUrl);
     cachedConfig = cachedConfig || (await discoverConfig(fetch));
-    const rows = [];
-    for (let offset = 0; offset < MAX_ROWS; offset += PAGE_ROWS) {
-      let res = await query(fetch, cachedConfig, categories, since, offset);
-      if (res.status === 401 || res.status === 403) {
-        cachedConfig = await discoverConfig(fetch);
-        res = await query(fetch, cachedConfig, categories, since, offset);
-      }
-      if (!res.ok) throw new Error(`appinspo data endpoint responded ${res.status}`);
-      const page = await res.json();
-      if (!Array.isArray(page)) throw new Error('appinspo data endpoint returned an invalid response');
-      rows.push(...page);
-      // No `since` = first page only; since 0 (all time) pages through everything.
-      if (page.length < PAGE_ROWS || since == null) break;
-    }
+    const rows = await pagedRows({
+      name: 'appinspo', since, pageRows: PAGE_ROWS, maxRows: MAX_ROWS,
+      send: (offset) => query(fetch, cachedConfig, categories, since, offset),
+      refresh: async () => { cachedConfig = await discoverConfig(fetch); },
+    });
     return parse(rows, categories);
   },
   parse,

@@ -33,6 +33,21 @@ function readRpc(text, id) {
   return message.result;
 }
 
+// Checks a request to the local OAuth callback. Returns { url } when it is the real callback,
+// or { status, body } to answer with.
+function checkCallback(request, redirectUri, state) {
+  let url;
+  try { url = new URL(request.url, redirectUri); } catch { return { status: 400 }; }
+  if (request.method !== 'GET' || url.pathname !== '/mobbin/callback') return { status: 404 };
+  if (request.headers.host !== new URL(redirectUri).host || url.searchParams.get('state') !== state) return { status: 400, body: 'Invalid authorization state.' };
+  return { url };
+}
+
+function checkAuthorization(url, issuer) {
+  if (url.searchParams.has('error') || !url.searchParams.get('code')) throw new Error('Mobbin connection was not authorized. Try connecting again.');
+  if (url.searchParams.has('iss') && url.searchParams.get('iss') !== issuer) throw new Error('Mobbin authorization issuer did not match.');
+}
+
 function createMobbinMcp({ dataDir, fetch, openExternal, onChange = () => {}, now = () => Date.now() }) {
   const file = path.join(dataDir, 'mobbin-oauth.json');
   let credentials = null;
@@ -140,23 +155,31 @@ function createMobbinMcp({ dataDir, fetch, openExternal, onChange = () => {}, no
     return refreshing;
   }
 
-  async function rpc(method, params, notification = false, retried = false) {
-    const token = await accessToken();
-    const id = notification ? undefined : ++nextId;
+  function rpcHeaders(token) {
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
     if (initialized) headers['MCP-Protocol-Version'] = PROTOCOL;
     if (sessionId) headers['Mcp-Session-Id'] = sessionId;
-    const { response, text } = await send(MCP_URL, { method: 'POST', headers,
-      body: JSON.stringify({ jsonrpc: '2.0', ...(notification ? {} : { id }), method, ...(params == null ? {} : { params }) }),
-    });
+    return headers;
+  }
+
+  // Throws for the statuses that mean the call cannot go on.
+  function checkRpcStatus(response) {
+    if (response.status === 403) throw new Error('Mobbin MCP access was denied. Check your subscription and reconnect.');
+    if (response.status === 404 && sessionId) { initialized = false; sessionId = null; throw new Error('The Mobbin MCP session expired. Run the source again.'); }
+    if (!response.ok) throw new Error(`Mobbin MCP responded ${response.status}. Try again later.`);
+  }
+
+  async function rpc(method, params, notification = false, retried = false) {
+    const token = await accessToken();
+    const id = notification ? undefined : ++nextId;
+    const message = { jsonrpc: '2.0', ...(notification ? {} : { id }), method, ...(params == null ? {} : { params }) };
+    const { response, text } = await send(MCP_URL, { method: 'POST', headers: rpcHeaders(token), body: JSON.stringify(message) });
     if (response.status === 401 && !retried) {
       await accessToken(true);
       return rpc(method, params, notification, true);
     }
     if (response.status === 401) { clear(); throw loginRequired(); }
-    if (response.status === 403) throw new Error('Mobbin MCP access was denied. Check your subscription and reconnect.');
-    if (response.status === 404 && sessionId) { initialized = false; sessionId = null; throw new Error('The Mobbin MCP session expired. Run the source again.'); }
-    if (!response.ok) throw new Error(`Mobbin MCP responded ${response.status}. Try again later.`);
+    checkRpcStatus(response);
     if (response.headers.get('mcp-session-id')) sessionId = response.headers.get('mcp-session-id');
     return notification ? null : readRpc(text, id);
   }
@@ -216,16 +239,13 @@ function createMobbinMcp({ dataDir, fetch, openExternal, onChange = () => {}, no
     let client;
     let exchanging = false;
     const server = http.createServer(async (request, response) => {
-      let url;
       response.setHeader('Connection', 'close');
-      try { url = new URL(request.url, redirectUri); } catch { response.writeHead(400); response.end(); return; }
-      if (request.method !== 'GET' || url.pathname !== '/mobbin/callback') { response.writeHead(404); response.end(); return; }
-      if (request.headers.host !== new URL(redirectUri).host || url.searchParams.get('state') !== state) { response.writeHead(400); response.end('Invalid authorization state.'); return; }
-      if (exchanging) { response.writeHead(409); response.end(); return; }
+      const checked = checkCallback(request, redirectUri, state);
+      if (!checked.url || exchanging) { response.writeHead(checked.status || 409); response.end(checked.body); return; }
+      const { url } = checked;
       exchanging = true;
       try {
-        if (url.searchParams.has('error') || !url.searchParams.get('code')) throw new Error('Mobbin connection was not authorized. Try connecting again.');
-        if (url.searchParams.has('iss') && url.searchParams.get('iss') !== metadata.issuer) throw new Error('Mobbin authorization issuer did not match.');
+        checkAuthorization(url, metadata.issuer);
         const value = await tokenRequest(metadata.token_endpoint, {
           grant_type: 'authorization_code', code: url.searchParams.get('code'), redirect_uri: redirectUri,
           client_id: client.client_id, code_verifier: verifier, resource: MCP_URL,

@@ -114,62 +114,86 @@ function recordFailure(source, err, ctx) {
   store.save();
 }
 
+const markSeen = (lib, keys, now) => {
+  for (const k of keys) lib.seen[k] = now;
+};
+
+// Download every file of a post and add it to Eagle; one outcome per file.
+function addMedia(item, website, label, ctx) {
+  const { eagleItem, fetch, tmpDir } = ctx;
+  const total = item.media.length;
+  const tasks = item.media.map((m, i) => async () => {
+    const file = await download(fetch, m.url, tmpDir);
+    try {
+      return await eagleItem.addFromPath(file, {
+        name: total > 1 ? `${item.title} (${i + 1}/${total})` : item.title,
+        website,
+        tags: tagsFor(item, label),
+        folders: [],
+        annotation: annotationFor(item, label),
+      });
+    } finally {
+      fs.rmSync(file, { force: true });
+    }
+  });
+  return pool(tasks, DOWNLOAD_CONCURRENCY);
+}
+
+async function importItem(plan, item, ctx, lib, result) {
+  const { store, eagleItem, now = Date.now(), log = () => {} } = ctx;
+  const { source, adapter, label } = plan;
+  const keys = keysFor(adapter.id, item);
+  // Another source in the same run may already have imported this planned item.
+  if (keys.some((key) => lib.seen[key])) return;
+  const website = item.postUrl || item.pageUrl;
+  if (item.postUrl && (await eagleItem.count({ url: website })) > 0) return markSeen(lib, keys, now);
+  const outcomes = await addMedia(item, website, label, ctx);
+  const ids = outcomes.filter((o) => o.ok).map((o) => o.value);
+  outcomes.filter((o) => !o.ok).forEach((o) => log(`${label}: ${o.error.message}`));
+  result.failed += outcomes.length - ids.length;
+  if (!ids.length) return;
+  markSeen(lib, keys, now);
+  result.imported += ids.length;
+  result.posts += 1;
+  store.addActivity(lib, { at: Date.now(), sourceId: source.id, label, title: item.title, itemId: ids[0], count: ids.length });
+  // Save as we go so a long backfill that gets interrupted doesn't re-import.
+  if (result.posts % 10 === 0) store.save();
+}
+
+async function importItems(plan, ctx, lib, result) {
+  const { shouldStop = () => false, onProgress = () => {} } = ctx;
+  for (const item of plan.items) {
+    if (shouldStop()) {
+      result.stopped = true;
+      return;
+    }
+    result.done += 1;
+    onProgress(result);
+    await importItem(plan, item, ctx, lib, result);
+  }
+}
+
+// After the last post: fail a run that must be complete but isn't, then record the outcome.
+function finishPlan(plan, ctx, status, result) {
+  const { now = Date.now() } = ctx;
+  const { adapter } = plan;
+  if (result.failed && adapter.requiresCompleteImport) throw new Error(`${result.failed} files could not be imported. Run again to resume the same app.`);
+  if (!result.stopped && adapter.completeImport) adapter.completeImport(plan, ctx);
+  Object.assign(status, result.stopped ? { lastImported: result.imported, lastError: null } : { lastSuccessAt: now, lastImported: result.imported, lastError: null });
+}
+
 // Step 2: download and import the planned posts, then record the outcome.
 async function importPlan(plan, ctx) {
-  const { store, libraryPath, eagleItem, fetch, tmpDir, now = Date.now(), log = () => {}, shouldStop = () => false, onProgress = () => {} } = ctx;
-  const { source, adapter, label } = plan;
+  const { store, libraryPath, now = Date.now(), log = () => {}, onProgress = () => {} } = ctx;
+  const { source, label } = plan;
   const lib = store.library(libraryPath);
   const status = (lib.status[source.id] = { ...lib.status[source.id], lastAttemptAt: now });
   const result = { sourceId: source.id, label, imported: 0, posts: 0, failed: 0, total: plan.items.length, done: 0, stopped: false, error: null };
   onProgress(result);
 
   try {
-    for (const item of plan.items) {
-      if (shouldStop()) {
-        result.stopped = true;
-        break;
-      }
-      result.done += 1;
-      onProgress(result);
-      // Another source in the same run may already have imported this planned item.
-      if (keysFor(adapter.id, item).some((key) => lib.seen[key])) continue;
-      const website = item.postUrl || item.pageUrl;
-      if (item.postUrl && (await eagleItem.count({ url: website })) > 0) {
-        for (const k of keysFor(adapter.id, item)) lib.seen[k] = now;
-        continue;
-      }
-      const total = item.media.length;
-      const outcomes = await pool(
-        item.media.map((m, i) => async () => {
-          const file = await download(fetch, m.url, tmpDir);
-          try {
-            return await eagleItem.addFromPath(file, {
-              name: total > 1 ? `${item.title} (${i + 1}/${total})` : item.title,
-              website,
-              tags: tagsFor(item, label),
-              folders: [],
-              annotation: annotationFor(item, label),
-            });
-          } finally {
-            fs.rmSync(file, { force: true });
-          }
-        }),
-        DOWNLOAD_CONCURRENCY,
-      );
-      const ids = outcomes.filter((o) => o.ok).map((o) => o.value);
-      outcomes.filter((o) => !o.ok).forEach((o) => log(`${label}: ${o.error.message}`));
-      result.failed += outcomes.length - ids.length;
-      if (!ids.length) continue;
-      for (const k of keysFor(adapter.id, item)) lib.seen[k] = now;
-      result.imported += ids.length;
-      result.posts += 1;
-      store.addActivity(lib, { at: Date.now(), sourceId: source.id, label, title: item.title, itemId: ids[0], count: ids.length });
-      // Save as we go so a long backfill that gets interrupted doesn't re-import.
-      if (result.posts % 10 === 0) store.save();
-    }
-    if (result.failed && adapter.requiresCompleteImport) throw new Error(`${result.failed} files could not be imported. Run again to resume the same app.`);
-    if (!result.stopped && adapter.completeImport) adapter.completeImport(plan, ctx);
-    Object.assign(status, result.stopped ? { lastImported: result.imported, lastError: null } : { lastSuccessAt: now, lastImported: result.imported, lastError: null });
+    await importItems(plan, ctx, lib, result);
+    finishPlan(plan, ctx, status, result);
   } catch (err) {
     result.error = err.message;
     status.lastError = err.message;
