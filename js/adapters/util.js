@@ -103,7 +103,30 @@ async function discoverSupabaseConfig(fetch, origin) {
   return null;
 }
 
+// Rows of a public Supabase table, a page at a time. `send(offset)` makes the request; a 401 or 403 means
+// the anon key rotated, so `refresh()` rediscovers it and the page is asked for once more.
+// No `since` = first page only; since 0 (all time) pages through everything.
+async function pagedRows({ name, send, refresh, since, pageRows, maxRows, warn = console.warn }) {
+  const rows = [];
+  for (let offset = 0; offset < maxRows; offset += pageRows) {
+    let res = await send(offset);
+    if (res.status === 401 || res.status === 403) {
+      await refresh();
+      res = await send(offset);
+    }
+    if (!res.ok) throw new Error(`${name} data endpoint responded ${res.status}`);
+    const page = await res.json();
+    if (!Array.isArray(page)) throw new Error(`${name} data endpoint returned an invalid response`);
+    rows.push(...page);
+    if (page.length < pageRows || since == null) break;
+    if (offset + pageRows >= maxRows) warn(`${name}: reached the ${maxRows}-row limit; the import may be incomplete.`);
+  }
+  return rows;
+}
+
+const namesOf = (list) => (list || []).map((t) => t && t.name).filter(Boolean);
+
 module.exports = {
-  MAX_VIDEO_SHORT_EDGE, USER_AGENT, fetchText, xStatusId, pickVideo, pickImage, toTime, cleanTitle, oldestOf, mapLimit,
+  namesOf, pagedRows, MAX_VIDEO_SHORT_EDGE, USER_AGENT, fetchText, xStatusId, pickVideo, pickImage, toTime, cleanTitle, oldestOf, mapLimit,
   decodeEntities, findSupabaseConfig, discoverSupabaseConfig,
 };

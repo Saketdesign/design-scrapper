@@ -1,0 +1,41 @@
+{
+  "entry": [
+    "js/main.js",
+    "js/ui.js",
+    "css/**/*.css",
+    "scripts/*.js",
+    "lib/sodium/lint/plugin.mjs"
+  ],
+  "ignorePatterns": [
+    "test/fixtures/**"
+  ],
+  "ignoreExports": [
+    {
+      "file": "js/runner.js",
+      "exports": [
+        "recordFailure",
+        "labelFor"
+      ]
+    },
+    {
+      "file": "lib/sodium/lint/value-rules.mjs",
+      "exports": [
+        "LINT_IGNORES"
+      ]
+    }
+  ],
+  "duplicates": {
+    "ignore": [
+      "css/sodium/tokens.css",
+      "css/sodium/base.css",
+      "lib/sodium/**"
+    ]
+  },
+  "health": {
+    "ignore": [
+      "css/sodium/tokens.css",
+      "css/sodium/base.css",
+      "lib/sodium/**"
+    ]
+  }
+}

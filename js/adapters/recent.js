@@ -1,5 +1,5 @@
 const { readTsr } = require('../lib/seroval');
-const { fetchText, xStatusId, pickVideo, pickImage, toTime, oldestOf, USER_AGENT } = require('./util');
+const { fetchText, xStatusId, pickVideo, pickImage, toTime, oldestOf, USER_AGENT, namesOf } = require('./util');
 
 const ORIGIN = 'https://recent.design';
 // The site's own "load more" endpoint (oRPC), used only to page back past the first page.
@@ -20,27 +20,35 @@ function mediaOf(m) {
   return { type: m.mediaType === 'video' ? 'video' : 'image', url: best.url, width: best.width, height: best.height };
 }
 
+const postUrlOf = (it) => (it.source && it.source.url) || null;
+
+function creatorOf(it) {
+  const account = (it.source && it.source.account) || it.creator || {};
+  return { name: account.name || '', handle: account.handle || '' };
+}
+
+function toItem(it) {
+  const postUrl = postUrlOf(it);
+  return {
+    id: it.id,
+    xStatusId: xStatusId(postUrl),
+    title: it.title || it.slug,
+    description: it.description || it.tagline || '',
+    creator: creatorOf(it),
+    postUrl,
+    pageUrl: `${ORIGIN}/i/${it.id}-${it.slug}`,
+    publishedAt: toTime(it.publishedAt) || toTime(it.createdAt),
+    category: it.category && it.category.slug,
+    tags: namesOf(it.tags),
+    media: it.media.map(mediaOf).filter(Boolean),
+  };
+}
+
 function toItems(raw) {
   return raw
     .filter((it) => it && it.id && Array.isArray(it.media) && it.media.length)
     .filter((it) => !it.status || it.status === 'published')
-    .map((it) => {
-      const account = (it.source && it.source.account) || it.creator || {};
-      const postUrl = (it.source && it.source.url) || null;
-      return {
-        id: it.id,
-        xStatusId: xStatusId(postUrl),
-        title: it.title || it.slug,
-        description: it.description || it.tagline || '',
-        creator: { name: account.name || '', handle: account.handle || '' },
-        postUrl,
-        pageUrl: `${ORIGIN}/i/${it.id}-${it.slug}`,
-        publishedAt: toTime(it.publishedAt) || toTime(it.createdAt),
-        category: it.category && it.category.slug,
-        tags: (it.tags || []).map((t) => t && t.name).filter(Boolean),
-        media: it.media.map(mediaOf).filter(Boolean),
-      };
-    });
+    .map(toItem);
 }
 
 function parsePage(html) {

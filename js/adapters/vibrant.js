@@ -1,5 +1,5 @@
 const { readTsr } = require('../lib/seroval');
-const { fetchText, xStatusId, pickVideo, pickImage, toTime, oldestOf, mapLimit } = require('./util');
+const { fetchText, xStatusId, pickVideo, pickImage, toTime, oldestOf, mapLimit, namesOf } = require('./util');
 
 const ORIGIN = 'https://vibrant.design';
 // Older posts come from the sitemap plus each post's page; the site's "load more" lives under
@@ -15,15 +15,25 @@ function feedUrl(sourceUrl) {
   return url.toString();
 }
 
-function toItem(it) {
-  const videos = (it.videos || [])
+const asMedia = (type) => (r) => ({ type, url: r.url, width: r.width, height: r.height });
+
+function videosOf(it) {
+  return (it.videos || [])
     .map((v) => pickVideo([...(v.renditions || []).filter((r) => r.kind !== 'hover'), { url: v.url, width: v.width, height: v.height }]))
     .filter(Boolean)
-    .map((r) => ({ type: 'video', url: r.url, width: r.width, height: r.height }));
-  const images = (it.images || [])
+    .map(asMedia('video'));
+}
+
+function imagesOf(it) {
+  return (it.images || [])
     .map((img) => pickImage([...(img.renditions || []), { url: img.url, width: img.width, height: img.height }]))
     .filter(Boolean)
-    .map((r) => ({ type: 'image', url: r.url, width: r.width, height: r.height }));
+    .map(asMedia('image'));
+}
+
+const slugsOf = (list) => (list || []).map((c) => c && c.slug).filter(Boolean);
+
+function toItem(it) {
   const creator = it.creator || {};
   const postUrl = it.websiteUrl || null;
   return {
@@ -35,9 +45,9 @@ function toItem(it) {
     postUrl,
     pageUrl: `${ORIGIN}${it.path || `/feed/${it.slug}`}`,
     publishedAt: toTime(it.publishedAt) || toTime(it.createdAt),
-    categories: (it.categories || []).map((c) => c && c.slug).filter(Boolean),
-    tags: (it.tags || []).map((t) => t && t.name).filter(Boolean),
-    media: [...videos, ...images],
+    categories: slugsOf(it.categories),
+    tags: namesOf(it.tags),
+    media: [...videosOf(it), ...imagesOf(it)],
   };
 }
 

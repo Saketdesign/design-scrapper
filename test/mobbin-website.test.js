@@ -58,8 +58,8 @@ test('Chrome extension reuses a Mobbin tab with session credentials and rejects 
   const noop = { addListener() {} };
   const context = vm.createContext({
     setTimeout, clearTimeout, AbortController, location: { origin: 'https://mobbin.com' },
-    importScripts() {},
-    fetch: async (url, options) => { calls.push({ url, options }); return { ok: true, json: async () => ({ value: { app: 'Alpha' } }) }; },
+    importScripts: (...files) => files.forEach((file) => vm.runInContext(fs.readFileSync(path.join(__dirname, '../chrome-extension/mobbin', file), 'utf8'), context)),
+    fetch: async (url, options) => { calls.push({ url, options }); return { ok: true, status: 200, text: async () => JSON.stringify({ value: { app: 'Alpha' } }) }; },
     chrome: {
       storage: { local: { get: async () => ({}) } },
       runtime: { onMessage: noop, onStartup: noop, onInstalled: noop },
@@ -79,4 +79,82 @@ test('Chrome extension reuses a Mobbin tab with session credentials and rejects 
   const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../chrome-extension/mobbin/manifest.json')));
   assert.deepEqual(manifest.host_permissions, ['https://mobbin.com/*', 'http://127.0.0.1/*']);
   assert.ok(!manifest.permissions.includes('cookies'));
+});
+
+test('Chrome pairing accepts only the exact loopback tab origin and connect path', () => {
+  const { trustedPairing } = require('../chrome-extension/mobbin/validate');
+  const config = { base: 'http://127.0.0.1:34567', token: 'a'.repeat(64) };
+  const message = { type: 'pair', config };
+  assert.equal(trustedPairing(message, { tab: { id: 1 }, url: config.base + '/connect' }), true);
+  assert.equal(trustedPairing(message, { tab: { id: 1 }, url: 'http://127.0.0.1:34568/connect' }), false);
+  assert.equal(trustedPairing(message, { tab: { id: 1 }, url: config.base + '/connect-evil' }), false);
+  assert.equal(trustedPairing(message, { tab: { id: 1 }, url: config.base + '/connect?other=1' }), false);
+  assert.equal(trustedPairing(message, { url: config.base + '/connect' }), false);
+});
+
+test('counterfeit local server cannot silently pair even with a forged status response', async () => {
+  const handlers = {};
+  const local = {};
+  const session = {};
+  const requests = [];
+  const noop = { addListener() {} };
+  const context = vm.createContext({
+    setTimeout, clearTimeout, AbortController, URL,
+    importScripts: (...files) => files.forEach((file) =>
+      vm.runInContext(fs.readFileSync(path.join(__dirname, '../chrome-extension/mobbin', file), 'utf8'), context)),
+    fetch: async (url) => {
+      requests.push(url);
+      return url.endsWith('/v1/status')
+        ? { ok: true, json: async () => ({ name: 'design-scrapper-mobbin', version: 1 }) }
+        : { ok: false };
+    },
+    chrome: {
+      runtime: { id: 'extension-test', getURL: (p) => `chrome-extension://extension-test/${p}`,
+        onMessage: { addListener: (fn) => { handlers.onMessage = fn; } },
+        onStartup: noop, onInstalled: noop },
+      storage: {
+        local: { get: async () => ({ config: local.config }), set: async (value) => Object.assign(local, value) },
+        session: { get: async () => ({ pendingPair: session.pendingPair }),
+          set: async (value) => Object.assign(session, value), remove: async (key) => { delete session[key]; } },
+      },
+      alarms: { create() {}, onAlarm: noop }, action: { onClicked: noop },
+    },
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../chrome-extension/mobbin/background.js'), 'utf8'), context);
+  const send = (message, sender) => new Promise((resolve) => {
+    if (handlers.onMessage(message, sender, resolve) !== true) resolve(null);
+  });
+  const config = { base: 'http://127.0.0.1:34567', token: 'b'.repeat(64) };
+  const page = { tab: { id: 5 }, url: config.base + '/connect' };
+  assert.equal((await send({ type: 'pair', config }, page)).pending, true);
+  assert.equal(local.config, undefined);
+  assert.equal(requests.length, 0);
+  assert.equal(await send({ type: 'approve-pair' }, page), null);
+  assert.equal(local.config, undefined);
+  const popup = { url: 'chrome-extension://extension-test/popup.html' };
+  assert.equal((await send({ type: 'pairing-status' }, popup)).base, config.base);
+  assert.equal((await send({ type: 'approve-pair' }, popup)).ok, true);
+  assert.equal(local.config.base, config.base);
+  assert.equal(requests[0], config.base + '/v1/status');
+});
+
+test('Chrome bridge preserves a UTF-8 character split between HTTP chunks', async (t) => {
+  const http = require('node:http');
+  const { client, base, headers, ready } = await setup(t);
+  const polling = fetch(`${base}/v1/poll`, { headers });
+  await ready;
+  const result = client.checkLogin();
+  const job = await (await polling).json();
+  const payload = Buffer.from(JSON.stringify({ id: job.id, result: { data: { value: 'Café' } } }));
+  const split = payload.indexOf(Buffer.from('é')) + 1;
+  assert.ok(split > 0);
+  await new Promise((resolve, reject) => {
+    const request = http.request(base + '/v1/result', { method: 'POST', headers }, (response) => {
+      response.resume(); response.on('end', resolve);
+    });
+    request.on('error', reject);
+    request.write(payload.subarray(0, split));
+    setTimeout(() => request.end(payload.subarray(split)), 15);
+  });
+  assert.equal(await result, 'Café');
 });

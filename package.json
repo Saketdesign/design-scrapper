@@ -4,7 +4,8 @@
   "description": "eagle plugin. runtime needs no packages; these are dev tools only.",
   "scripts": {
     "test": "node --test",
-    "lint": "eslint -c sodium.eslint.config.mjs . && node scripts/check-sodium.js"
+    "lint": "eslint -c sodium.eslint.config.mjs . && node scripts/check-sodium.js",
+    "fallow": "npx --yes fallow@3.38.1"
   },
   "devDependencies": {
     "@typescript-eslint/parser": "^8.71.0",

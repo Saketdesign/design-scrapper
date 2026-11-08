@@ -9,16 +9,20 @@ function checkApp(app, current) {
     || current.appId && app.id !== current.appId) throw new Error('Mobbin returned a different app or platform. The selected iOS app has been kept for retry.');
 }
 
+function versionScreens(version) {
+  if (!UUID.test(version.id || '') || !Array.isArray(version.appScreens)) throw new Error('Mobbin returned an incomplete app-version catalog.');
+  return version.appScreens.map((screen) => {
+    if (!UUID.test(screen.id || '')) throw new Error('Mobbin returned a screen without an ID.');
+    return { id: screen.id, versionId: version.id, versionDate: version.publishedAt || version.createdAt || null };
+  });
+}
+
 function catalogOf(app, current) {
   checkApp(app, current);
   if (!Array.isArray(app.appVersions) || !app.appVersions.length) throw new Error('Mobbin did not return the selected app’s screen catalog.');
   const screens = new Map();
   for (const version of app.appVersions) {
-    if (!UUID.test(version.id || '') || !Array.isArray(version.appScreens)) throw new Error('Mobbin returned an incomplete app-version catalog.');
-    for (const screen of version.appScreens) {
-      if (!UUID.test(screen.id || '')) throw new Error('Mobbin returned a screen without an ID.');
-      if (!screens.has(screen.id)) screens.set(screen.id, { id: screen.id, versionId: version.id, versionDate: version.publishedAt || version.createdAt || null });
-    }
+    for (const screen of versionScreens(version)) if (!screens.has(screen.id)) screens.set(screen.id, screen);
   }
   if (!screens.size) throw new Error('Mobbin returned no screens for the selected app.');
   return [...screens.values()];
@@ -52,69 +56,100 @@ function itemFor(current, screen, type, url) {
   };
 }
 
-async function exportApp(website, current, { isKnown, save, shouldStop = () => false }) {
-  if (!website) throw new Error('Connect the Mobbin Chrome bridge to download the selected app’s screens and animations.');
-  if (!current.appId) {
-    const seed = await website.request('/api/screen/fetch-screen-info', { screenId: current.seedScreenId });
-    checkApp(seed && seed.app, current);
-    current.appId = seed.app.id;
-    save();
-  }
-  if (!current.catalog) {
-    const app = await website.request('/api/app/fetch-app-versions-screens', { appId: current.appId });
-    current.catalog = catalogOf(app, current);
-    save();
-  }
+const STOPPED = 'Stopped while checking the app. Run again to resume the same app.';
+
+async function ensureAppId(website, current, save) {
+  if (current.appId) return;
+  const seed = await website.request('/api/screen/fetch-screen-info', { screenId: current.seedScreenId });
+  checkApp(seed && seed.app, current);
+  current.appId = seed.app.id;
+  save();
+}
+
+async function ensureCatalog(website, current, save) {
+  if (current.catalog) return;
+  const app = await website.request('/api/app/fetch-app-versions-screens', { appId: current.appId });
+  current.catalog = catalogOf(app, current);
+  save();
+}
+
+function groupByVersion(catalog) {
   const versions = new Map();
-  for (const screen of current.catalog) {
+  for (const screen of catalog) {
     if (!versions.has(screen.versionId)) versions.set(screen.versionId, []);
     versions.get(screen.versionId).push(screen);
   }
-  const inspected = new Set(current.inspectedVersionIds || []);
-  const videos = new Set(current.videoScreenIds || []);
-  const items = [];
-  const slug = normalized(current.name).normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 120) || 'app';
-  for (const [versionId, screens] of versions) {
-    if (shouldStop()) throw new Error('Stopped while checking the app. Run again to resume the same app.');
-    if (inspected.has(versionId) && screens.every((screen) => isKnown(screen.id) && (!videos.has(screen.id) || isKnown(`${screen.id}:animation`)))) continue;
-    // The download-details API returns null animation metadata even for real
-    // videos. Read the authenticated app page, which supplies the actual inventory.
-    const page = await website.request('/app-version-page', { appId: current.appId, versionId, slug });
-    if (!page || !Array.isArray(page.screens)) throw new Error('Mobbin did not return the app’s animation inventory.');
-    const byId = new Map(page.screens.map((screen) => [screen.id, screen]));
-    const media = new Map();
-    for (const screen of screens) {
-      const record = byId.get(screen.id);
-      if (!record || record.appVersionId !== versionId) throw new Error('Mobbin did not return every screen in this app version. Run again to resume the same app.');
-      if (record.restricted) throw new Error('Your Mobbin account cannot access this app version. Check your subscription in Chrome.');
-      media.set(screen.id, mediaOf({ ...record, app: { id: record.appId, appName: record.appName, platform: record.platform } }, current, screen.id, false));
-    }
-    if (!inspected.has(versionId)) {
-      for (const screen of screens) if (media.get(screen.id).video) videos.add(screen.id);
-      inspected.add(versionId);
-      current.inspectedVersionIds = [...inspected];
-      current.videoScreenIds = [...videos];
-      save();
-    }
-    for (const screen of screens) {
-      if (shouldStop()) throw new Error('Stopped while checking the app. Run again to resume the same app.');
-      const urls = media.get(screen.id);
-      if (!isKnown(screen.id)) {
-        const info = await website.request('/api/screen/fetch-screen-info', { screenId: screen.id });
-        const image = mediaOf(info, current, screen.id).image;
-        items.push(itemFor(current, screen, 'image', image));
-      }
-      if (videos.has(screen.id) && !isKnown(`${screen.id}:animation`)) {
-        if (!urls.video) throw new Error('A pending Mobbin animation is unavailable. Run again to resume the same app.');
-        items.push(itemFor(current, screen, 'video', urls.video));
-      }
-    }
+  return versions;
+}
+
+const slugFor = (name) => normalized(name).normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 120) || 'app';
+
+function stopIfRequested(ex) {
+  if (ex.shouldStop()) throw new Error(STOPPED);
+}
+
+const versionComplete = (ex, versionId, screens) =>
+  ex.inspected.has(versionId) && screens.every((screen) => ex.isKnown(screen.id) && (!ex.videos.has(screen.id) || ex.isKnown(`${screen.id}:animation`)));
+
+function screenMedia(current, record, versionId, screenId) {
+  if (!record || record.appVersionId !== versionId) throw new Error('Mobbin did not return every screen in this app version. Run again to resume the same app.');
+  if (record.restricted) throw new Error('Your Mobbin account cannot access this app version. Check your subscription in Chrome.');
+  return mediaOf({ ...record, app: { id: record.appId, appName: record.appName, platform: record.platform } }, current, screenId, false);
+}
+
+// The download-details API returns null animation metadata even for real
+// videos. Read the authenticated app page, which supplies the actual inventory.
+async function inventory(ex, versionId, screens) {
+  const page = await ex.website.request('/app-version-page', { appId: ex.current.appId, versionId, slug: ex.slug });
+  if (!page || !Array.isArray(page.screens)) throw new Error('Mobbin did not return the app’s animation inventory.');
+  const byId = new Map(page.screens.map((screen) => [screen.id, screen]));
+  return new Map(screens.map((screen) => [screen.id, screenMedia(ex.current, byId.get(screen.id), versionId, screen.id)]));
+}
+
+function rememberVideos(ex, versionId, screens, media) {
+  if (ex.inspected.has(versionId)) return;
+  for (const screen of screens) if (media.get(screen.id).video) ex.videos.add(screen.id);
+  ex.inspected.add(versionId);
+  ex.current.inspectedVersionIds = [...ex.inspected];
+  ex.current.videoScreenIds = [...ex.videos];
+  ex.save();
+}
+
+async function exportScreen(ex, screen, urls) {
+  if (!ex.isKnown(screen.id)) {
+    const info = await ex.website.request('/api/screen/fetch-screen-info', { screenId: screen.id });
+    ex.items.push(itemFor(ex.current, screen, 'image', mediaOf(info, ex.current, screen.id).image));
   }
-  current.assetIds = current.catalog.map((screen) => screen.id).concat([...videos].map((id) => `${id}:animation`));
-  current.videoScreenIds = [...videos];
+  if (!ex.videos.has(screen.id) || ex.isKnown(`${screen.id}:animation`)) return;
+  if (!urls.video) throw new Error('A pending Mobbin animation is unavailable. Run again to resume the same app.');
+  ex.items.push(itemFor(ex.current, screen, 'video', urls.video));
+}
+
+async function exportVersion(ex, versionId, screens) {
+  stopIfRequested(ex);
+  if (versionComplete(ex, versionId, screens)) return;
+  const media = await inventory(ex, versionId, screens);
+  rememberVideos(ex, versionId, screens, media);
+  for (const screen of screens) {
+    stopIfRequested(ex);
+    await exportScreen(ex, screen, media.get(screen.id));
+  }
+}
+
+async function exportApp(website, current, { isKnown, save, shouldStop = () => false }) {
+  if (!website) throw new Error('Connect the Mobbin Chrome bridge to download the selected app’s screens and animations.');
+  await ensureAppId(website, current, save);
+  await ensureCatalog(website, current, save);
+  const ex = {
+    website, current, isKnown, save, shouldStop, items: [], slug: slugFor(current.name),
+    inspected: new Set(current.inspectedVersionIds || []), videos: new Set(current.videoScreenIds || []),
+  };
+  for (const [versionId, screens] of groupByVersion(current.catalog)) await exportVersion(ex, versionId, screens);
+  current.assetIds = current.catalog.map((screen) => screen.id).concat([...ex.videos].map((id) => `${id}:animation`));
+  current.videoScreenIds = [...ex.videos];
   current.inventoryComplete = true;
   save();
-  return items;
+  return ex.items;
 }
 
 module.exports = { exportApp, catalogOf, mediaOf };
