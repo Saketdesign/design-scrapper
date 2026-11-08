@@ -12,9 +12,8 @@ function printItem(it) {
   console.log(`  - ${it.title}  @${it.creator.handle}  [${it.media.map(mediaText).join(', ')}]  ${it.tags.slice(0, 4).join(', ')}`);
 }
 
-async function check(url, hours) {
+async function check(url, hours, since) {
   const adapter = adapterFor(url);
-  const since = sinceFrom(hours);
   try {
     const items = await adapter.fetchItems(url, { fetch, since });
     const fresh = items.filter((it) => !it.publishedAt || it.publishedAt >= since);
@@ -29,7 +28,8 @@ async function check(url, hours) {
 async function main() {
   const [hoursArg, ...urls] = process.argv.slice(2);
   const hours = hoursFrom(hoursArg);
-  for (const url of urls.length ? urls : DEFAULT_SOURCES.map((s) => s.url)) await check(url, hours);
+  const since = sinceFrom(hours);
+  for (const url of urls.length ? urls : DEFAULT_SOURCES.map((s) => s.url)) await check(url, hours, since);
 }
 
 main();

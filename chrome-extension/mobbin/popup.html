@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Design Scrapper pairing</title>
+  <style>
+    body { font: 13px system-ui, sans-serif; width: 285px; padding: 16px; margin: 0; color: #242424; }
+    h1 { font-size: 16px; margin: 0 0 12px; }
+    #address { font-family: monospace; overflow-wrap: anywhere; font-weight: 600; }
+    p { line-height: 1.5; }
+    button { border: 0; border-radius: 6px; padding: 9px 12px; background: #242424; color: white; cursor: pointer; }
+    button:disabled { opacity: .45; cursor: default; }
+    #message { min-height: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Connect to Eagle</h1>
+  <p id="message">Checking for a pairing request…</p>
+  <p id="address"></p>
+  <p>Approve only if you just selected <strong>Pair Chrome</strong> in Eagle and this address matches the page Eagle opened. An approved bridge can request your signed-in Mobbin data.</p>
+  <button id="approve" disabled>Approve pairing</button>
+  <script src="popup.js"></script>
+</body>
+</html>

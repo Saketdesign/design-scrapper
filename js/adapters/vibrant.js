@@ -1,5 +1,5 @@
 const { readTsr } = require('../lib/seroval');
-const { fetchText, xStatusId, pickVideo, pickImage, toTime, oldestOf, mapLimit } = require('./util');
+const { fetchText, xStatusId, pickVideo, pickImage, toTime, oldestOf, mapLimit, namesOf } = require('./util');
 
 const ORIGIN = 'https://vibrant.design';
 // Older posts come from the sitemap plus each post's page; the site's "load more" lives under
@@ -32,7 +32,6 @@ function imagesOf(it) {
 }
 
 const slugsOf = (list) => (list || []).map((c) => c && c.slug).filter(Boolean);
-const namesOf = (list) => (list || []).map((t) => t && t.name).filter(Boolean);
 
 function toItem(it) {
   const creator = it.creator || {};

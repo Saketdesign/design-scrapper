@@ -4,6 +4,6 @@ if (location.pathname === '/connect' && /^[a-f0-9]{64}$/.test(location.hash.slic
   history.replaceState(null, '', '/connect');
   chrome.runtime.sendMessage({ type: 'pair', config }, (result) => {
     const status = document.getElementById('bridge-status');
-    if (status) status.textContent = result?.ok ? 'Chrome is connected. Return to Eagle and choose Check connection. Your existing Mobbin login will be used.' : 'Could not connect. In Eagle, choose Pair Chrome and try again.';
+    if (status) status.textContent = result?.pending ? 'Pairing request ready. Click the Design Scrapper extension icon and approve the matching local address. Then return to Eagle and choose Check connection.' : 'Could not request pairing. In Eagle, choose Pair Chrome and try again.';
   });
 }

@@ -93,14 +93,51 @@ function restartPoll() {
   else setTimeout(poll, 26000);
 }
 
+// Local HTTP services can forge /connect and /v1/status. Never pair on the basis
+// of those responses alone: the extension popup requires a separate user action.
+const PAIR_TTL_MS = 2 * 60 * 1000;
+let approving = false;
+
+async function pendingPair() {
+  const { pendingPair: pending } = await chrome.storage.session.get('pendingPair');
+  if (!pending) return null;
+  if (Date.now() - pending.createdAt <= PAIR_TTL_MS && pending.createdAt <= Date.now()) return pending;
+  await chrome.storage.session.remove('pendingPair');
+  return null;
+}
+
+async function approvePair() {
+  if (approving) return false;
+  approving = true;
+  try {
+    const pending = await pendingPair();
+    if (!pending) return false;
+    await chrome.storage.session.remove('pendingPair');
+    await pair(pending.config);
+    restartPoll();
+    return true;
+  } catch { return false; } finally { approving = false; }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, respond) => {
-  if (!bridgeValidate.trustedPairing(message, sender)) return;
-  pair(message.config).then(() => { respond({ ok: true }); restartPoll(); }, () => respond({ ok: false }));
-  return true;
+  if (bridgeValidate.trustedPairing(message, sender)) {
+    chrome.storage.session.set({ pendingPair: { config: message.config, createdAt: Date.now() } })
+      .then(() => respond({ pending: true }), () => respond({ pending: false }));
+    return true;
+  }
+  // Only our extension-owned popup can approve a pending endpoint.
+  if (sender.tab || sender.url !== chrome.runtime.getURL('popup.html')) return;
+  if (message && message.type === 'pairing-status') {
+    pendingPair().then((pending) => respond({ base: pending ? pending.config.base : null }), () => respond({ base: null }));
+    return true;
+  }
+  if (message && message.type === 'approve-pair') {
+    approvePair().then((ok) => respond({ ok }), () => respond({ ok: false }));
+    return true;
+  }
 });
 chrome.alarms.create('mobbin-bridge', { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener(() => poll());
 chrome.runtime.onStartup.addListener(() => poll());
 chrome.runtime.onInstalled.addListener(() => poll());
-chrome.action.onClicked.addListener(() => poll());
 poll();

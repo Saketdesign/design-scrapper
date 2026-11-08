@@ -36,7 +36,7 @@ function whenOf(t, now = new Date()) {
   const d = new Date(t);
   const diff = Math.round((new Date(now.toDateString()) - new Date(d.toDateString())) / DAY);
   const names = { 0: 'Today', 1: 'Yesterday' };
-  const day = names[diff] || d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const day = names[diff] || d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   return `${day} ${timeOf(t)}`;
 }
 

@@ -69,7 +69,7 @@ function createMobbinWebsite({ dataDir, openChrome, onChange = () => {}, now = D
   }
   function connectPage(response) {
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'" });
-    response.end('<!doctype html><meta charset="utf-8"><title>Connect Design Scrapper</title><h1>Connect Design Scrapper</h1><p id="bridge-status">The Design Scrapper Mobbin Chrome bridge must be installed. Once connected, return to Eagle and choose Check connection.</p>');
+    response.end('<!doctype html><meta charset="utf-8"><title>Connect Design Scrapper</title><h1>Connect Design Scrapper</h1><p id="bridge-status">To connect, open the Design Scrapper extension icon in Chrome and approve the local bridge address shown there. Only approve if you just clicked Pair Chrome in Eagle. Then return to Eagle and choose Check connection.</p>');
   }
   function authorized(request) {
     const expected = `Bearer ${config.token}`;
@@ -88,6 +88,7 @@ function createMobbinWebsite({ dataDir, openChrome, onChange = () => {}, now = D
   // The request body as text, or null when it is larger than a result may be.
   async function readBody(request) {
     let body = '';
+    request.setEncoding('utf8');
     for await (const chunk of request) {
       body += chunk;
       if (body.length > 32 * 1024 * 1024) return null;

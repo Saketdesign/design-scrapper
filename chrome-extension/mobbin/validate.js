@@ -55,15 +55,21 @@
     }
   }
 
-  const CONNECT_URL = /^http:\/\/127\.0\.0\.1:\d+\/connect(?:#|$)/;
-  const BRIDGE_BASE = /^http:\/\/127\.0\.0\.1:\d+$/;
   const BRIDGE_TOKEN = /^[a-f0-9]{64}$/;
 
-  // True for a pairing message sent by the connect page Eagle serves on this machine, and nothing else.
+  // A content script may only nominate the exact loopback origin of its /connect tab.
+  // The origin alone is NOT an identity check: the user must approve it in the extension popup.
   function trustedPairing(message, sender) {
-    if (message.type !== 'pair' || !sender.tab || !CONNECT_URL.test(sender.url || '')) return false;
+    if (!message || message.type !== 'pair' || !sender || !sender.tab) return false;
     const config = message.config || {};
-    return BRIDGE_BASE.test(config.base || '') && BRIDGE_TOKEN.test(config.token || '');
+    if (!BRIDGE_TOKEN.test(config.token || '')) return false;
+    try {
+      const url = new URL(sender.url);
+      return url.protocol === 'http:' && url.hostname === '127.0.0.1'
+        && Boolean(url.port) && url.pathname === '/connect' && !url.search
+        && (!url.hash || url.hash === `#${config.token}`)
+        && config.base === url.origin;
+    } catch { return false; }
   }
 
   const api = { validateJob, requestSpec, interpret, validKeyset, trustedPairing };

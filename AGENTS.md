@@ -6,7 +6,7 @@ so avoid newer CSS (e.g. `color-mix`) and Node 18+ only APIs inside `js/`.
 
 ## Commands
 - Tests: `node --test 'test/*.test.js'` (fixtures in `test/fixtures/`, saved from the live sites)
-- Dead code, duplicates, complexity: `npx fallow` (config in `.fallowrc.json`; generated `lib/sodium/` and fixtures are excluded). Must exit 0.
+- Dead code, duplicates, complexity: `npm run fallow` (pinned to `fallow@3.38.1`; config in `.fallowrc.json`; generated `lib/sodium/`, vendored Sodium `tokens.css`/`base.css`, and test fixtures are excluded). Must exit 0.
 - Live check without Eagle: `node scripts/dry-run.js [hours=24 | all] [url ...]` (lists only, downloads nothing; `all` takes a few minutes)
 - Load in Eagle: Plugins → Developer Options → Import local project → this folder. Logs: `eagle.log` (Eagle's log), set `devTools: true` in manifest.json for the inspector.
 

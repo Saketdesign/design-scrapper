@@ -25,7 +25,7 @@ function largestFromSrcset(srcset) {
 const META_VIDEO = new Set(['og:video', 'og:video:url', 'og:video:secure_url']);
 const META_IMAGE = new Set(['og:image', 'og:image:url', 'twitter:image']);
 
-// Each finder returns [url, type, alt] candidates found in the HTML, in page order.
+// Each finder returns [url, type, alt?] candidates found in the HTML, in page order.
 function metaMedia(html) {
   const found = [];
   for (const tag of html.match(/<meta\s[^>]*>/gi) || []) {
